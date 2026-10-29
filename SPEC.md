@@ -8,7 +8,7 @@
 - 결정된 기본 도구: 인증은 Supabase Auth, Python 데이터 계층은 SQLAlchemy 2, 스키마 마이그레이션은 Alembic. PostgreSQL 드라이버와 구체 버전은 Phase 1에서 호환성을 확인해 고정한다.
 - 상태: 구현 전 명세 초안. 저장소에는 아직 애플리케이션 코드나 서버가 없으므로 배포 환경, API 경로, PostgreSQL 드라이버 버전 및 구체 구현은 정하지 않았다.
 - 제품은 데스크톱 우선 React 웹으로 시작한다. 설치형 PWA 및 공유 수신은 초기 범위에서 미루며, 직접 URL 입력은 기본 저장 경로다.
-- PostgreSQL 통합 테스트는 Docker 기반 로컬 Supabase CLI 환경을 사용한다. 현재 개발 환경에는 Docker Desktop이 설치되지 않았으므로, 테스트 환경 구축 전에 사용자가 Docker Desktop을 설치하고 실행해야 한다. 운영 Supabase 프로젝트는 테스트에 사용하지 않는다.
+- PostgreSQL 통합 테스트는 Docker 기반 로컬 Supabase CLI 환경을 사용한다. 현재 PC에는 Docker Desktop이 설치됐고 WSL/Virtual Machine Platform 기능도 활성화됐으나, 엔진 사용 전 Windows 재시작이 필요하다. `docker` 명령이 PATH에서 검색되지 않으면 Docker CLI 전체 경로(`C:\Program Files\Docker\Docker\resources\bin\docker.exe`)를 사용하거나 PATH를 설정한다. 운영 Supabase 프로젝트는 테스트에 사용하지 않는다.
 - 애플리케이션 스키마 마이그레이션의 단일 기준은 Alembic이다. Supabase CLI는 로컬 서비스(PostgreSQL/Auth 등) 실행과 중지에 사용하며, 같은 애플리케이션 스키마를 Supabase CLI 마이그레이션과 Alembic에 중복 정의하지 않는다. 통합 테스트는 로컬 Supabase를 시작한 다음 Alembic 마이그레이션을 적용한다.
 
 ## 2. 시스템 경계와 설계 원칙
