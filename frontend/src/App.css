@@ -1,0 +1,176 @@
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  padding: 0 clamp(24px, 7vw, 112px);
+}
+
+.topbar {
+  display: flex;
+  min-height: 84px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e8e5e0;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  color: #24231f;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e8efdf;
+  color: #35523c;
+  font-family: Georgia, serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #76756f;
+  font-size: 12px;
+}
+
+.connection-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d7a94d;
+}
+
+.connection--connected .connection-dot {
+  background: #4a9b69;
+}
+
+.connection--disconnected .connection-dot {
+  background: #c35a52;
+}
+
+.welcome {
+  width: min(100%, 720px);
+  margin: auto;
+  padding: 88px 0 112px;
+}
+
+.eyebrow {
+  margin: 0 0 18px;
+  color: #75866a;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.welcome h1 {
+  margin: 0;
+  color: #24231f;
+  font-size: clamp(32px, 5vw, 52px);
+  font-weight: 600;
+  letter-spacing: -0.055em;
+  line-height: 1.18;
+}
+
+.welcome-copy {
+  max-width: 520px;
+  margin: 20px 0 0;
+  color: #77766f;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.setup-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 48px;
+  padding: 22px 24px;
+  border: 1px solid #e9e7e1;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(52 48 36 / 4%);
+}
+
+.setup-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: #f1f3eb;
+  color: #546747;
+  font-size: 18px;
+}
+
+.setup-card h2 {
+  margin: 2px 0 6px;
+  color: #34332e;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.setup-card p {
+  margin: 0;
+  color: #85837c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.footer {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #e8e5e0;
+  color: #929089;
+  font-size: 11px;
+}
+
+@media (max-width: 600px) {
+  .app-shell {
+    padding-inline: 20px;
+  }
+
+  .topbar {
+    min-height: 72px;
+  }
+
+  .connection {
+    font-size: 0;
+  }
+
+  .connection-dot {
+    width: 9px;
+    height: 9px;
+  }
+
+  .welcome {
+    padding: 72px 0;
+  }
+
+  .setup-card {
+    padding: 18px;
+  }
+
+  .footer {
+    gap: 12px;
+    font-size: 10px;
+  }
+}
