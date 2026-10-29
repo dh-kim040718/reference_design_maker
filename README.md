@@ -14,5 +14,11 @@
 - 백엔드 API: FastAPI
 - 운영 데이터베이스: Supabase (PostgreSQL)
 - 빠른 테스트용 데이터베이스: SQLite
+- 인증: Supabase Auth
+- Python 데이터 계층 / 마이그레이션: SQLAlchemy 2 / Alembic
+- PostgreSQL 통합 테스트: Docker 기반 로컬 Supabase (운영 DB 사용 금지)
+- 인증: Supabase Auth
+- Python 데이터 계층 / 마이그레이션: SQLAlchemy 2 / Alembic
+- PostgreSQL 통합 테스트: Docker 기반 로컬 Supabase (운영 DB 사용 금지)
 
 실제 OpenAI 키는 프로젝트 루트의 로컬 `.env` 파일에 설정하세요. `.env.example`은 템플릿이며, 키를 커밋하거나 채팅에 공유하지 마세요.
