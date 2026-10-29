@@ -6,7 +6,7 @@
 - 목적: PRD의 사용자 요구사항을 제품 동작, 데이터, 경계 조건 및 검증 가능한 기준으로 구체화한다.
 - 확정된 기술 구성: React 웹 클라이언트, FastAPI 애플리케이션 서버, 운영 DB Supabase(PostgreSQL), 빠른 테스트용 SQLite.
 - 결정된 기본 도구: 인증은 Supabase Auth, Python 데이터 계층은 SQLAlchemy 2, 스키마 마이그레이션은 Alembic. PostgreSQL 드라이버와 구체 버전은 Phase 1에서 호환성을 확인해 고정한다.
-- 상태: 구현 전 명세 초안. 로컬 Supabase 실행을 확인했지만 애플리케이션 코드나 서버는 아직 없어 배포 환경, API 경로, PostgreSQL 드라이버 버전 및 구체 구현은 정하지 않았다.
+- 상태: 구현을 위한 제품·기술 명세 초안. Phase 0에서 로컬 Supabase 실행을 확인하고 Phase 1에서 앱 골격을 만들었다. 배포 환경, API 경로 및 세부 구현 계약은 해당 기능을 구현할 때 확정한다.
 - 제품은 데스크톱 우선 React 웹으로 시작한다. 설치형 PWA 및 공유 수신은 초기 범위에서 미루며, 직접 URL 입력은 기본 저장 경로다.
 - PostgreSQL 통합 테스트는 Docker 기반 로컬 Supabase CLI 환경을 사용한다. Docker Desktop 엔진은 `docker version`에서 Client와 Server 정보가 모두 출력되는 것까지 확인했다. CLI가 PATH에서 검색되지 않으면 Docker CLI 전체 경로(`C:\Program Files\Docker\Docker\resources\bin\docker.exe`)를 사용하거나 PATH를 설정한다. 운영 Supabase 프로젝트는 테스트에 사용하지 않는다.
 - 애플리케이션 스키마 마이그레이션의 단일 기준은 Alembic이다. Supabase CLI는 로컬 서비스(PostgreSQL/Auth 등) 실행과 중지에 사용하며, 같은 애플리케이션 스키마를 Supabase CLI 마이그레이션과 Alembic에 중복 정의하지 않는다. 통합 테스트는 로컬 Supabase를 시작한 다음 Alembic 마이그레이션을 적용한다.
