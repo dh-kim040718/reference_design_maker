@@ -1,0 +1,17 @@
+name: reference-design-maker
+services:
+  api:
+    build: ./backend
+    env_file:
+      - ${APP_ENV_FILE:?Set APP_ENV_FILE to a separate deployment env file}
+    expose:
+      - "8000"
+    restart: unless-stopped
+  web:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

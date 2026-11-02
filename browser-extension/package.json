@@ -1,0 +1,6 @@
+{
+  "name": "reference-maker-collector",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test" }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "레퍼런스 메이커",
+  "short_name": "레퍼런스",
+  "description": "디자인 레퍼런스를 프로젝트별로 저장하고 정리하세요.",
+  "lang": "ko",
+  "start_url": "/projects",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f7f2",
+  "theme_color": "#365c43",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  }
+}

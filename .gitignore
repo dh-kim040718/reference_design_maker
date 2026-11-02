@@ -10,3 +10,6 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 dist/
+.phase2-checks/
+.phase4-checks/
+.phase6-backups/
