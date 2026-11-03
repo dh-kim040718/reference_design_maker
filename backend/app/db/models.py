@@ -32,6 +32,7 @@ class Project(Timestamps, Base):
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     owner_id: Mapped[UUID] = mapped_column(Uuid)
     name: Mapped[str] = mapped_column(String(100))
+    brief: Mapped[str] = mapped_column(Text, default="", server_default="")
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     __table_args__ = (Index("ix_projects_owner", "owner_id", "archived_at", "updated_at", "id"),)
 
@@ -73,7 +74,11 @@ class Generation(Timestamps, Base):
     __tablename__ = "generations"
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     owner_id: Mapped[UUID] = mapped_column(Uuid)
-    reference_id: Mapped[UUID] = mapped_column(ForeignKey("references.id", ondelete="RESTRICT"))
+    reference_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("references.id", ondelete="RESTRICT"))
+    project_id: Mapped[UUID | None] = mapped_column(ForeignKey("projects.id", ondelete="RESTRICT"))
+    scope: Mapped[str] = mapped_column(String(16), default="reference", server_default="reference")
+    project_snapshot_json: Mapped[str | None] = mapped_column(Text)
     request_id: Mapped[UUID] = mapped_column(Uuid)
     request_hash: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(20), default="queued")

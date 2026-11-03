@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
@@ -22,6 +23,8 @@ class Settings(BaseSettings):
                                            decimal_places=6)
     generation_reservation_usd: Decimal = Field(default=Decimal("1"), gt=0, le=1000,
                                                 decimal_places=6)
+    generation_budget_start_at: datetime | None = None
+    generation_daily_limit: int = Field(default=3, ge=1, le=1000)
 
     model_config = SettingsConfigDict(
         env_file=REPOSITORY_ROOT / ".env",

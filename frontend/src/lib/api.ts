@@ -12,6 +12,7 @@ export interface Session {
 export interface Project {
   id: string; name: string; archived_at: string | null; created_at: string; updated_at: string
   thumbnail_url?: string | null
+  brief?: string
 }
 export interface DeliverableType extends Project {
   project_id: string; project_name: string; read_only: boolean

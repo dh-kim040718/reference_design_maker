@@ -181,7 +181,7 @@ def pinterest_endpoint(url: str):
     return None
 
 
-def get_preview(url: str):
+def _get_preview(url: str):
     unavailable = {"preview_url": None, "title": None, "status": "unavailable"}
     try:
         provider_endpoint = pinterest_endpoint(url)
@@ -247,6 +247,31 @@ def get_preview(url: str):
         return {**unavailable, "reason": "network_error"}
     except (ValueError, http.client.HTTPException):
         return {**unavailable, "reason": "unavailable"}
+
+
+def get_preview(url: str):
+    result = _get_preview(url)
+    if result["status"] == "available" or not pinterest_endpoint(url):
+        return result
+    # A user-submitted public pin can expose OG metadata even when oEmbed is
+    # unavailable. No cookies, login, browser impersonation, or page crawling.
+    try:
+        deadline = time.monotonic() + 7
+        public_address(url, deadline)
+        status, data, content_type, final_url = fetch(url, deadline, limit=4 * 1024 * 1024)
+        if status != 200 or "text/html" not in content_type.lower():
+            return result
+        metadata = Metadata()
+        metadata.feed(data.decode("utf-8", "replace"))
+        image = urljoin(final_url, metadata.image) if metadata.image else None
+        if not image or urlsplit(image).scheme != "https":
+            return result
+        public_address(image, deadline)
+        return {"preview_url": image,
+                "title": (metadata.title or metadata.text_title).strip()[:200] or None,
+                "status": "available"}
+    except (ValueError, OSError, TimeoutError, http.client.HTTPException):
+        return result
 
 
 def validate_thumbnail(value: str | None):

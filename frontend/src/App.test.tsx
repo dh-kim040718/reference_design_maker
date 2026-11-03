@@ -25,6 +25,7 @@ function authorized() {
     if (path === '/references/preview') return {preview_url: null, title: null, status: 'unavailable'}
     if (path.startsWith('/projects?')) return page([project])
     if (path === '/projects/project') return project
+    if (path.startsWith('/projects/project/references')) return page([reference])
     if (path.startsWith('/projects/project/deliverable-types')) return page([kind])
     if (path === '/deliverable-types/type') return kind
     if (path.startsWith('/deliverable-types/type/references')) return page([reference])
@@ -41,6 +42,32 @@ beforeEach(() => {
 afterEach(() => {cleanup(); vi.resetAllMocks()})
 
 describe('Phase 2 library', () => {
+  it('keeps classification navigation separate from management actions', async () => {
+    authorized()
+    history.replaceState(null, '', '/projects/project')
+    render(<App />)
+    const filters = await screen.findByRole('navigation', {name: '레퍼런스 분류'})
+    expect(filters.querySelector('details')).toBeNull()
+    expect(filters).not.toHaveTextContent('분류 추가')
+    const manager = document.querySelector<HTMLDetailsElement>('.classification-manager')!
+    fireEvent.click(manager.querySelector('summary')!)
+    expect(manager.open).toBe(true)
+    fireEvent.keyDown(document, {key: 'Escape'})
+    expect(manager.open).toBe(false)
+    fireEvent.click(manager.querySelector('summary')!)
+    fireEvent.click(screen.getByRole('button', {name: '웹사이트 이름 변경'}))
+    expect(manager.open).toBe(false)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toHaveValue('웹사이트')
+  })
+  it('opens project references directly and offers classification filters', async () => {
+    authorized()
+    history.replaceState(null, '', '/projects/project')
+    render(<App />)
+    expect(await screen.findByRole('heading', {name: 'example.com'})).toBeInTheDocument()
+    expect(screen.getByRole('navigation', {name: '레퍼런스 분류'})).toHaveTextContent('웹사이트')
+    expect(screen.queryByRole('link', {name: '레퍼런스 보기 →'})).not.toBeInTheDocument()
+  })
   it('prefills an external shared link and does not save until the user confirms', async () => {
     authorized()
     history.replaceState(null, '', '/share?' + new URLSearchParams({url: reference.source_url, title: 'Shared design', text: '좋은 여백'}))

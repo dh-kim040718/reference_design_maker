@@ -1,13 +1,35 @@
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type AnchorHTMLAttributes } from 'react'
 import { api, ApiError, errorMessage, getSession, login, signup, saveSession, previewFailureMessage,
   type DeliverableType, type Page, type Path, type Project, type Reference, type Preview } from './lib/api'
 import { Thumbnail, ImagePicker } from './Thumbnail'
+import { ProjectHeader } from './ProjectHeader'
 import { CollectPage } from './CollectPage'
 import { GenerationPage } from './GenerationPage'
+import { LegacyGenerationRedirect, ProjectGenerationPage } from './ProjectGenerationPage'
 import { acceptIncomingShare, pendingShare, pendingShareRoute, clearPendingShare } from './lib/share'
 import './App.css'
 
 let dirty = false
+function SavedReferenceThumbnail({item, readOnly}: {item: Reference; readOnly: boolean}) {
+  const [resolved, setResolved] = useState<string | null>(null)
+  const [status, setStatus] = useState('')
+  useEffect(() => {
+    if (item.preview_url || readOnly) return
+    let active = true
+    const timer = setTimeout(() => {
+      setStatus('미리보기 불러오는 중…')
+      void api<Preview>('/references/preview', 'POST', {source_url: item.source_url}).then(async preview => {
+        if (!active) return
+        if (!preview.preview_url) {setStatus(previewFailureMessage(preview)); return}
+        await api(`/references/${item.id}/thumbnail`, 'PATCH', {preview_url: preview.preview_url, preview_source: 'page_metadata'})
+        if (active) {setResolved(preview.preview_url); setStatus('')}
+      }).catch(() => {if (active) setStatus('원본 사이트의 미리보기를 불러오지 못했습니다.')})
+    }, 200)
+    return () => {active = false; clearTimeout(timer)}
+  }, [item.id, item.source_url, item.preview_url, readOnly])
+  return <><Thumbnail url={item.preview_url || resolved} label={item.title || host(item.source_url)} />{status && <span className="hint" role="status">{status}</span>}</>
+}
+function setPageDirty(value: boolean) {dirty = value}
 type Draft = { ownerId: string; values: Record<string, string> }
 const drafts = new Map<string, Draft>()
 function readDraft(route: string) {
@@ -22,8 +44,8 @@ function go(path: string, force = false, notice = '', preserveShare = false) {
   history.pushState({notice}, '', path)
   window.dispatchEvent(new Event('popstate'))
 }
-function Link({to, children, className}: {to: string; children: ReactNode; className?: string}) {
-  return <a className={className} href={to} onClick={event => {
+function Link({to, children, className, ...attributes}: {to: string; children: ReactNode} & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'onClick'>) {
+  return <a {...attributes} className={className} href={to} onClick={event => {
     if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) {event.preventDefault(); go(to)}
   }}>{children}</a>
 }
@@ -124,13 +146,22 @@ function LibraryPage({projectId, typeId, search}: {projectId?: string; typeId?: 
   const [dialog, setDialog] = useState<{item?: Project; title: string} | null>(null)
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(false)
+  const manager = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    const close = (event: PointerEvent) => {if (manager.current && !manager.current.contains(event.target as Node)) manager.current.open = false}
+    const escape = (event: KeyboardEvent) => {if (event.key === 'Escape' && manager.current?.open) {manager.current.open = false; manager.current.querySelector('summary')?.focus()}}
+    document.addEventListener('pointerdown', close)
+    document.addEventListener('keydown', escape)
+    return () => {document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape)}
+  }, [])
   const query = `?archived=${archived}&limit=24&offset=${offset}`
   const {data, error, reload} = useLoad(async () => {
     const parent = projectId ? await api<Project>(`/projects/${projectId}`) : undefined
     const kind = typeId ? await api<DeliverableType>(`/deliverable-types/${typeId}`) : undefined
     if (kind && kind.project_id !== projectId) throw new Error('항목을 찾을 수 없습니다.')
-    const page = await api<Page<Project | Reference>>(typeId ? `/deliverable-types/${typeId}/references${query}` : projectId ? `/projects/${projectId}/deliverable-types${query}` : `/projects${query}`)
-    return {parent, kind, page}
+    const kinds = projectId ? await allItems<DeliverableType>(`/projects/${projectId}/deliverable-types?archived=${archived}`) : []
+    const page = await api<Page<Project | Reference>>(typeId ? `/deliverable-types/${typeId}/references${query}` : projectId ? `/projects/${projectId}/references${query}` : `/projects${query}`)
+    return {parent, kind, page, kinds}
   }, `${base}${query}`)
   if (error) return <ErrorState message={error} retry={reload} />
   if (!data) return <Loading />
@@ -142,22 +173,46 @@ function LibraryPage({projectId, typeId, search}: {projectId?: string; typeId?: 
     setBusy(true); setActionError('')
     try {await api(path(item), 'PATCH', {archived: !item.archived_at}); reload()} catch (error) {setActionError(errorMessage(error))} finally {setBusy(false)}
   }
-  return <>
-    <nav className="breadcrumbs" aria-label="현재 위치"><Link to="/projects">프로젝트</Link>{data.parent && <><span>/</span><Link to={`/projects/${projectId}`}>{data.parent.name}</Link></>}{data.kind && <><span>/</span><span>{data.kind.name}</span></>}</nav>
-    <Heading title={title} copy={typeId ? '모아둔 레퍼런스에서 다음 디자인의 힌트를 찾아보세요.' : projectId ? '어떤 산출물을 위한 레퍼런스인가요?' : '작업에 필요한 디자인 레퍼런스를 프로젝트별로 모아보세요.'}>
-      {!readOnly && (typeId ? <Link className="button" to={`/references/new?project=${projectId}&type=${typeId}`}>＋ 레퍼런스 추가</Link> : <button onClick={() => setDialog({title: projectId ? '산출물 유형 추가' : '프로젝트 만들기'})}>＋ {projectId ? '산출물 유형 추가' : '프로젝트 만들기'}</button>)}
-    </Heading>
+  return <section className={`library-workspace${projectId ? ' project-library' : ''}`}>
+    {projectId ? <ProjectHeader projectId={projectId} name={data.parent?.name || title} active="references" count={data.page.total} navigate={go}>
+      {!readOnly && <Link className="button project-add" to={`/references/new?project=${projectId}${typeId || data.kinds.length === 1 ? `&type=${typeId || data.kinds[0].id}` : ''}`}>＋ 레퍼런스 추가</Link>}
+    </ProjectHeader> : <><nav className="breadcrumbs" aria-label="현재 위치"><Link to="/projects">프로젝트</Link></nav><Heading title={title}>
+      {!readOnly && (projectId ? <Link className="button" to={`/references/new?project=${projectId}${typeId || data.kinds.length === 1 ? `&type=${typeId || data.kinds[0].id}` : ''}`}>＋ 레퍼런스 추가</Link> : <button onClick={() => setDialog({title: '프로젝트 만들기'})}>＋ 프로젝트 만들기</button>)}
+    </Heading></>}
     {readOnly && <div className="notice">보관된 경로입니다. 조회와 원본 열기는 가능합니다.<button className="secondary" disabled={busy} onClick={async () => {
       setBusy(true); try {await api(data.parent?.archived_at ? `/projects/${projectId}` : `/deliverable-types/${typeId}`, 'PATCH', {archived: false}); reload()} catch (error) {setActionError(errorMessage(error))} finally {setBusy(false)}
     }}>보관 해제</button></div>}
-    {!typeId && <div className="tabs"><Link className={!archived ? 'active' : ''} to={base}>진행 중</Link><Link className={archived ? 'active' : ''} to={`${base}?archived=true`}>보관함</Link></div>}
-    <div className="list-caption"><span>{typeId ? '레퍼런스' : projectId ? '산출물 유형' : '프로젝트'} {data.page.total}개</span><span>{typeId ? '최근 저장순' : '최근 수정순'}</span></div>
+    {!projectId && <div className="tabs"><Link className={!archived ? 'active' : ''} to={base}>진행 중</Link><Link className={archived ? 'active' : ''} to={`${base}?archived=true`}>보관함</Link></div>}
+    {projectId && <div className="reference-list-toolbar"><nav className="project-type-filters" aria-label="레퍼런스 분류">
+      <span className="filter-caption">분류</span>
+      <Link className={!typeId ? 'active' : ''} to={`/projects/${projectId}${archived ? '?archived=true' : ''}`}>전체</Link>
+      {data.kinds.map(kind => <Link key={kind.id} className={typeId === kind.id ? 'active' : ''} aria-current={typeId === kind.id ? 'page' : undefined} to={`/projects/${projectId}/types/${kind.id}`}>{kind.name}</Link>)}
+    </nav><div className="reference-toolbar-actions">
+      {!data.parent?.archived_at && <details className="classification-manager" ref={manager}><summary>분류 관리</summary><section className="classification-panel" aria-label="분류 관리 패널">
+        <strong>분류 관리</strong>
+        {!data.kinds.length && <p className="hint">표시할 분류가 없습니다.</p>}
+        <div className="classification-rows">{data.kinds.map(kind => <div className="classification-row" key={kind.id}>
+          <span>{kind.name}</span><div>
+            {!kind.archived_at && <button className="text-button" disabled={busy} aria-label={`${kind.name} 이름 변경`} onClick={() => {if (manager.current) manager.current.open = false; setDialog({item: kind, title: '이름 변경'})}}>이름 변경</button>}
+            <button className="text-button" disabled={busy} aria-label={`${kind.name} ${kind.archived_at ? '보관 해제' : '보관'}`} onClick={() => {if (manager.current) manager.current.open = false; void archive(kind)}}>{kind.archived_at ? '보관 해제' : '보관'}</button>
+          </div>
+        </div>)}</div>
+        <button className="text-button classification-add" onClick={() => {if (manager.current) manager.current.open = false; setDialog({title: '산출물 유형 추가'})}}>＋ 분류 추가</button>
+      </section></details>}
+      <label className="reference-status-filter">표시<select aria-label="레퍼런스 표시 상태" value={archived || !!data.kind?.archived_at ? 'archived' : 'active'} onChange={event => go(`/projects/${projectId}${event.target.value === 'archived' ? '?archived=true' : ''}`)}><option value="active">진행 중</option><option value="archived">보관함</option></select></label>
+      {typeId && !readOnly && <Link className="button secondary classification-generate" to={`/projects/${projectId}/generate?type=${typeId}`}>이 분류로 AI 시안 만들기</Link>}
+    </div></div>}
+    {!projectId && <div className="list-caption"><span>프로젝트 {data.page.total}개</span><span>최근 수정순</span></div>}
     {actionError && <p className="error" role="alert">{actionError}</p>}
     {!data.page.items.length ? <div className="empty"><span className="empty-mark" aria-hidden="true">＋</span>
-      <h2>{archived ? '보관한 항목이 없어요' : typeId ? '첫 레퍼런스를 모아보세요' : projectId ? '산출물 유형을 만들어보세요' : '첫 프로젝트를 시작해보세요'}</h2>
-      <p>{archived ? '보관한 항목은 이곳에서 다시 찾을 수 있어요.' : typeId ? '위의 레퍼런스 추가 버튼으로 URL을 저장하세요.' : projectId ? '웹사이트, 앱, 프레젠테이션 등 작업에 맞게 분류하세요.' : '위의 프로젝트 만들기 버튼으로 나만의 라이브러리를 시작하세요.'}</p>
+      <h2>{archived ? '보관한 항목이 없어요' : projectId ? '첫 레퍼런스를 모아보세요' : '첫 프로젝트를 시작해보세요'}</h2>
+      <p>{archived ? '보관한 분류의 레퍼런스는 이곳에서 다시 찾을 수 있어요.' : projectId ? '위의 레퍼런스 추가 버튼으로 URL을 저장하세요.' : '위의 프로젝트 만들기 버튼으로 나만의 라이브러리를 시작하세요.'}</p>
     </div> : <div className="card-grid">{data.page.items.map(item => {
-      if ('source_url' in item) return <article className="reference-card" key={item.id}><Link className="card-preview" to={`/references/${item.id}?return=${encodeURIComponent(base + search)}`}><Thumbnail url={item.preview_url} label={item.title || host(item.source_url)} /></Link><p className="domain">↗ {host(item.source_url)}</p>
+      if ('source_url' in item) return <article className="reference-card" key={item.id}><Link className="card-preview" to={`/references/${item.id}?return=${encodeURIComponent(base + search)}`}><SavedReferenceThumbnail item={item} readOnly={readOnly} /></Link><p className="domain">↗ {host(item.source_url)}</p>
+        <div className="reference-location-tags" aria-label="레퍼런스 소속">
+          <Link to={`/projects/${item.project_id}`} className="reference-location-tag" title={`프로젝트: ${item.project_name}`}>{item.project_name}</Link>
+          <Link to={`/projects/${item.project_id}/types/${item.deliverable_type_id}`} className="reference-location-tag" title={`분류: ${item.deliverable_type_name}`}>{item.deliverable_type_name}</Link>
+        </div>
         <h2><Link to={`/references/${item.id}?return=${encodeURIComponent(base + search)}`}>{item.title || host(item.source_url)}</Link></h2><p className="card-note">{item.design_note || '메모 없음'}</p>
         <div className="card-bottom"><span>{date(item.created_at)}</span><a href={item.source_url} target="_blank" rel="noopener noreferrer">원본 열기 ↗</a></div></article>
       return <article className="project-card" key={item.id}>{item.thumbnail_url ? <Link className="card-preview" to={projectId ? `/projects/${projectId}/types/${item.id}` : `/projects/${item.id}`}><Thumbnail url={item.thumbnail_url} label={item.name} /></Link> : <span className="folder-mark" aria-hidden="true">▱</span>}<h2><Link to={projectId ? `/projects/${projectId}/types/${item.id}` : `/projects/${item.id}`}>{item.name}</Link></h2>
@@ -172,13 +227,13 @@ function LibraryPage({projectId, typeId, search}: {projectId?: string; typeId?: 
     {dialog && <NameDialog title={dialog.title} initial={dialog.item?.name} close={() => setDialog(null)} onSave={async name => {
       await api(dialog.item ? path(dialog.item) : projectId ? `/projects/${projectId}/deliverable-types` : '/projects', dialog.item ? 'PATCH' : 'POST', {name}); reload()
     }} />}
-  </>
+  </section>
 }
 
 async function allItems<T>(path: string) {
   const items: T[] = []
   for (let offset = 0; ; offset += 100) {
-    const page = await api<Page<T>>(`${path}?limit=100&offset=${offset}`)
+    const page = await api<Page<T>>(`${path}${path.includes('?') ? '&' : '?'}limit=100&offset=${offset}`)
     items.push(...page.items)
     if (items.length >= page.total || !page.items.length) return items
   }
@@ -262,7 +317,15 @@ function CreatePage({search}: {search: string}) {
       catch {setError('올바른 HTTP/HTTPS 주소를 입력해 주세요.'); formRef.current?.querySelector<HTMLInputElement>('[name=source_url]')?.focus(); return}
       setBusy(true)
       try {
-        const result = await api<Reference>('/references', 'POST', {project_id: projectId, deliverable_type_id: typeId, source_url: url.trim(), title: title || null, design_note: note || null, preview_url: previewUrl || null, preview_source: previewUrl ? previewSource || null : null})
+        let savedPreview = previewUrl
+        let savedSource = previewSource
+        if (!savedPreview && savedSource !== 'user_upload') {
+          try {
+            const preview = await api<Preview>('/references/preview', 'POST', {source_url: url.trim()})
+            if (preview.preview_url) {savedPreview = preview.preview_url; savedSource = 'page_metadata'}
+          } catch { /* A metadata failure must not prevent saving the reference. */ }
+        }
+        const result = await api<Reference>('/references', 'POST', {project_id: projectId, deliverable_type_id: typeId, source_url: url.trim(), title: title || null, design_note: note || null, preview_url: savedPreview || null, preview_source: savedPreview ? savedSource || null : null})
         go(`/projects/${result.project_id}/types/${result.deliverable_type_id}`, true, '레퍼런스를 저장했습니다.')
       } catch (error) {
         setError(errorMessage(error))
@@ -366,7 +429,7 @@ function DetailPage({id, search}: {id: string; search: string}) {
         }}>{thumbnailBusy ? '처리 중…' : '링크에서 불러오기'}</button></div><p className="image-help">이미지를 복사한 뒤 <kbd>Ctrl</kbd> + <kbd>V</kbd>로 붙여넣기</p></>}
       {thumbnailError && <p className="hint" role="status">{thumbnailError}</p>}
       </div><div className="inspector-info"><div className="inspector-title"><p className="domain">{host(data.source_url)}</p><h1>{data.title || host(data.source_url)}</h1></div>
-      <div className="reference-location"><span>{data.project_name}</span><span>/</span><span>{data.deliverable_type_name}</span></div>
+      <div className="reference-location"><Link to={`/projects/${data.project_id}`}>{data.project_name}</Link><span>/</span><span>{data.deliverable_type_name}</span></div>
       <a className="button secondary source-button" href={data.source_url} target="_blank" rel="noopener noreferrer">원본 열기 ↗</a>
       <a className="source-url" href={data.source_url} title={data.source_url} target="_blank" rel="noopener noreferrer">{data.source_url}</a>
       </div></div>
@@ -379,7 +442,7 @@ function DetailPage({id, search}: {id: string; search: string}) {
         }}><label>디자인 포인트 메모<textarea autoFocus disabled={busy} maxLength={5000} rows={4} value={note} onChange={event => setNote(event.target.value)} /></label>
           {saveError && <p className="error" role="alert">{saveError}</p>}<div className="form-actions"><button className="secondary" type="button" disabled={busy} onClick={() => {if (!dirty || window.confirm('수정 중인 메모를 버릴까요?')) {drafts.delete(draftRoute); setEditing(false)}}}>취소</button><button disabled={busy}>{busy ? '저장 중…' : '메모 저장'}</button></div>
         </form> : <p className={`note-content ${!data.design_note ? 'muted' : ''}`}>{data.design_note || '참고하고 싶은 디자인 포인트를 남겨보세요.'}</p>}
-      </section><div className="generation-entry"><div><strong>AI 탐색 시안</strong><p className="hint">전체 이미지와 메모로 새로운 디자인을 탐색해 보세요.</p></div><Link className="button secondary" to={`/references/${id}/generate`}>AI 시안 만들기 →</Link></div><div className="inspector-footer"><span>저장 {date(data.created_at)}</span><span>수정 {date(data.updated_at)}</span></div>{saved && <p role="status" className="success">메모를 저장했습니다.</p>}</article>
+      </section><div className="inspector-footer"><span>저장 {date(data.created_at)}</span><span>수정 {date(data.updated_at)}</span></div>{saved && <p role="status" className="success">메모를 저장했습니다.</p>}</article>
     </div></div>
 }
 
@@ -430,12 +493,13 @@ function App() {
   }} />
   else if (parts[0] === 'references' && parts[1] === 'new') content = <CreatePage key={user.id + location} search={url.search} />
   else if (url.pathname === '/collect') content = <CollectPage />
-  else if (parts[0] === 'references' && parts[2] === 'generate' && parts.length === 3) content = <GenerationPage key={user.id + location} referenceId={parts[1]} fromJobId={url.searchParams.get('from') || undefined} navigate={go} />
+  else if (parts[0] === 'projects' && parts[2] === 'generate' && parts.length === 3) content = <ProjectGenerationPage key={user.id + location} projectId={parts[1]} typeId={url.searchParams.get('type') || undefined} fromJobId={url.searchParams.get('from') || undefined} navigate={go} onDirtyChange={setPageDirty} />
+  else if (parts[0] === 'references' && parts[2] === 'generate' && parts.length === 3) content = <LegacyGenerationRedirect key={user.id + location} referenceId={parts[1]} navigate={go} />
   else if (parts[0] === 'generations' && parts[1] && parts.length === 2) content = <GenerationPage key={user.id + location} jobId={parts[1]} navigate={go} />
   else if (parts[0] === 'references' && parts[1] && parts.length === 2) content = <DetailPage key={user.id + parts[1]} id={parts[1]} search={url.search} />
   else if (!parts.length || url.pathname === '/login' || (parts[0] === 'projects' && (parts.length <= 2 || (parts.length === 4 && parts[2] === 'types')))) content = <LibraryPage key={user.id + location} projectId={parts[1]} typeId={parts[3]} search={url.search} />
   else content = <ErrorState message="페이지를 찾을 수 없습니다." />
-  return <div className="app-shell"><header className="topbar"><Link className="brand" to="/projects"><span className="brand-mark">R</span>레퍼런스 메이커</Link>
+  return <div className={`app-shell${user ? ' app-workspace' : ''}`}><header className="topbar"><Link className="brand" to="/projects"><span className="brand-mark">R</span>레퍼런스 메이커</Link>
     {user && <div className="account"><Link className="collect-nav" to="/collect">외부에서 저장</Link><span>{user.email}</span><button className="text-button" disabled={loggingOut} onClick={async () => {
       if (dirty && !window.confirm('작성 중인 내용을 버리고 로그아웃할까요?')) return
       setLoggingOut(true)

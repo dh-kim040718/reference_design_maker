@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime, UTC
 
 import pytest
 from sqlalchemy import select
@@ -12,6 +13,38 @@ from test_library import postgres_engine as postgres_engine  # noqa: F401
 
 from app.api.generation_provider import ProviderFailure, get_image_provider
 from app.db.models import Generation, GenerationBudget, GenerationQuota
+
+
+def test_explicit_new_budget_period_preserves_old_reservations_and_allows_one_call(generation):
+    client, ref, calls, settings = generation
+    settings.generation_budget_usd = 1
+    path = f"/api/v1/references/{ref['id']}/generations"
+    assert client.post(path, json=payload()).status_code == 202
+    settings.generation_budget_start_at = datetime.now(UTC)
+    assert client.post(path, json=payload()).status_code == 202
+    assert client.post(path, json=payload()).status_code == 429
+    assert len(calls) == 2
+    with Session(bind=bind_for(client), join_transaction_mode="create_savepoint") as db:
+        assert db.get(GenerationBudget, 1).reserved_micro_usd == 2_000_000
+
+
+def test_new_period_reports_historical_unreconciled_jobs_without_erasing_them(generation):
+    client, ref, calls, settings = generation
+    path = f"/api/v1/references/{ref['id']}/generations"
+    old = client.post(path, json=payload()).json()
+    with Session(bind=bind_for(client), join_transaction_mode="create_savepoint") as db:
+        db.get(Generation, UUID(old["id"])).reserved_micro_usd = None
+        db.get(GenerationBudget, 1).reserved_micro_usd = 0
+        db.commit()
+    settings.generation_budget_start_at = datetime.now(UTC)
+    settings.generation_budget_usd = 1
+    info = client.get("/api/v1/generation-policy").json()["budget"]
+    assert info["available"] and info["historical_unreconciled_jobs"] == 1
+    assert client.post(path, json=payload()).status_code == 202
+    assert client.post(path, json=payload()).status_code == 429
+    assert len(calls) == 2
+    with Session(bind=bind_for(client), join_transaction_mode="create_savepoint") as db:
+        assert db.get(Generation, UUID(old["id"])).reserved_micro_usd is None
 
 
 def test_budget_boundary_idempotency_and_delete_do_not_refund(generation):

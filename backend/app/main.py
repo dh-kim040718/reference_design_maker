@@ -12,6 +12,7 @@ from app.api.auth import router as auth_router
 from app.api.generations import router as generation_router
 from app.api.library import router as library_router
 from app.api.metrics import router as metrics_router
+from app.api.project_concepts import router as project_concept_router
 from app.api.routes import router
 from app.core.settings import get_settings
 from app.db.session import engine
@@ -45,6 +46,7 @@ app.include_router(auth_router)
 app.include_router(library_router)
 app.include_router(generation_router)
 app.include_router(metrics_router)
+app.include_router(project_concept_router)
 
 
 @app.exception_handler(RequestValidationError)

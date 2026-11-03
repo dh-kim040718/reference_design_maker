@@ -28,8 +28,8 @@ async function readThumbnail(file: File) {
   } finally {URL.revokeObjectURL(url)}
 }
 
-export function ImagePicker({onChange, disabled = false, label = '이미지 선택', showHint = true}: {
-  onChange: (url: string) => void | Promise<void>; disabled?: boolean; label?: string; showHint?: boolean
+export function ImagePicker({onChange, disabled = false, label = '이미지 선택', showHint = true, pasteEnabled = true}: {
+  onChange: (url: string) => void | Promise<void>; disabled?: boolean; label?: string; showHint?: boolean; pasteEnabled?: boolean
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
@@ -41,14 +41,14 @@ export function ImagePicker({onChange, disabled = false, label = '이미지 선�
     finally {setBusy(false)}
   })
   useEffect(() => {
-    if (disabled || busy) return
+    if (disabled || busy || !pasteEnabled) return
     const paste = (event: ClipboardEvent) => {
       const file = Array.from(event.clipboardData?.files ?? []).find(file => file.type.startsWith('image/'))
       if (file) {event.preventDefault(); void acceptFile(file)}
     }
     window.addEventListener('paste', paste)
     return () => window.removeEventListener('paste', paste)
-  }, [disabled, busy])
+  }, [disabled, busy, pasteEnabled])
   return <div className="image-picker"><input ref={input} type="file" accept="image/png,image/jpeg,image/webp" aria-label="썸네일 이미지 파일" hidden onChange={async event => {
     const file = event.target.files?.[0]
     if (!file) return

@@ -48,6 +48,7 @@ class EditInput(GenerationInput):
 
 def metadata(job):
     return {"id": job.id, "reference_id": job.reference_id, "status": job.status,
+            "project_id": job.project_id, "scope": job.scope,
             "operation": job.operation, "direction": job.direction,
             "instruction": job.instruction, "note_snapshot": job.note_snapshot,
             "created_at": job.created_at, "error_code": job.error_code,
@@ -77,8 +78,8 @@ def policy(user: User, db: DB, response: Response, edit_provider: EditProvider):
             "budget": allowance,
             "reason": "approval_required" if not settings.image_generation_enabled
                       else "key_missing" if not settings.openai_api_key else allowance["reason"],
-            "model": MODEL, "quality": "low", "size": "1024x1024", "daily_limit": DAILY_LIMIT,
-            "remaining": max(0, DAILY_LIMIT - (quota.used if quota else 0)),
+            "model": MODEL, "quality": "low", "size": "1024x1024", "daily_limit": settings.generation_daily_limit,
+            "remaining": max(0, settings.generation_daily_limit - (quota.used if quota else 0)),
             "rates_usd_per_million": {"text_input": 5, "image_input": 8, "output": 30}}
 
 
@@ -115,6 +116,9 @@ def _execute_job(bind, job_id, source, provider, mask=None):
                 + "\nLocal edit instruction: "
                 + (job.instruction or "Explore a variation inside the selected area only.")
             )
+        if job.scope == "project":
+            from app.api.project_concepts import project_prompt
+            prompt = project_prompt(json.loads(job.project_snapshot_json), job.instruction)
         safety_id = hashlib.sha256(str(job.owner_id).encode()).hexdigest()
         db.commit()
         started = time.monotonic()
@@ -173,6 +177,17 @@ def reserve(item_id, data, user, db, background, provider, editing=False):
                            data.direction, data.instruction], ensure_ascii=False)
                if editing else str(item_id) + "\0" + data.source_image + "\0" + data.instruction)
     digest = hashlib.sha256(content.encode()).hexdigest()
+    return enqueue(db, user, data.request_id, digest, data.instruction, provider, background,
+                   data.source_image, editing=editing,
+                   mask=data.mask_image if editing else None, fields={
+                       "reference_id": item_id, "project_id": parent.id,
+                       "direction": data.direction if editing else "",
+                       "note_snapshot": item.design_note or ""})
+
+
+def enqueue(db, user, request_id, digest, instruction, provider, background, source,
+            *, editing=False, fields=None, mask=None):
+    fields = fields or {}
     # Serialize all paid reservations; no transaction remains open during the API call.
     day = now().date()
     insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
@@ -180,9 +195,10 @@ def reserve(item_id, data, user, db, background, provider, editing=False):
     quota = db.scalar(select(GenerationQuota).where(GenerationQuota.day == day).with_for_update())
     expire_jobs(db, owner_id=user.id)
     existing = db.scalar(select(Generation).where(
-        Generation.owner_id == user.id, Generation.request_id == data.request_id))
+        Generation.owner_id == user.id, Generation.request_id == request_id))
     if existing:
-        if (existing.operation != ("edit" if editing else "generate")
+        if (existing.scope != fields.get("scope", "reference")
+                or existing.operation != ("edit" if editing else "generate")
                 or existing.request_hash != digest):
             fail(409, "REQUEST_CHANGED", "입력이 변경되었습니다. 새 요청으로 생성해 주세요.")
         result = metadata(existing)
@@ -197,25 +213,23 @@ def reserve(item_id, data, user, db, background, provider, editing=False):
         Generation.owner_id == user.id, Generation.status.in_(["queued", "processing"])))
     if active:
         fail(409, "GENERATION_ACTIVE", "진행 중인 생성 결과를 먼저 확인해 주세요.")
-    if quota.used >= DAILY_LIMIT:
+    if quota.used >= settings.generation_daily_limit:
         fail(429, "DAILY_LIMIT",
-             "오늘의 전체 생성 한도(3회)를 사용했습니다. UTC 자정에 초기화됩니다.")
+             "오늘의 전체 생성 한도를 사용했습니다. UTC 자정에 초기화됩니다.")
     quota.used += 1
     reservation = budget.reserve(db, settings)
-    job = Generation(owner_id=user.id, reference_id=item_id, request_id=data.request_id,
+    job = Generation(owner_id=user.id, request_id=request_id,
                      operation="edit" if editing else "generate",
-                     direction=data.direction if editing else "",
                      reserved_micro_usd=reservation,
-                     request_hash=digest, instruction=data.instruction,
-                     note_snapshot=item.design_note or "", status="queued", model=MODEL)
+                     request_hash=digest, instruction=instruction,
+                     status="queued", model=MODEL, **fields)
     db.add(job)
     db.flush()
     result = metadata(job)
     job_id = job.id
     bind = db.get_bind()
     db.commit()
-    background.add_task(execute_job, bind, job_id, data.source_image, provider,
-                        data.mask_image if editing else None)
+    background.add_task(execute_job, bind, job_id, source, provider, mask)
     return result
 
 
@@ -244,7 +258,9 @@ def owned(db, user, job_id):
 def detail(job_id: UUID, user: User, db: DB, response: Response):
     response.headers["Cache-Control"] = "no-store"
     job = owned(db, user, job_id)
-    return {**metadata(job), "result_image": job.result_image}
+    return {**metadata(job), "result_image": job.result_image,
+            "project_snapshot": json.loads(job.project_snapshot_json)
+            if job.project_snapshot_json else None}
 
 
 @router.delete("/generations/{job_id}", status_code=204)

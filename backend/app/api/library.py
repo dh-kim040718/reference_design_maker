@@ -2,7 +2,7 @@ from datetime import UTC
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -248,6 +248,17 @@ def list_references(item_id: UUID, db: DB, user: User, limit: Limit = 24, offset
     )
 
 
+@router.get("/projects/{item_id}/references")
+def list_project_references(item_id: UUID, db: DB, user: User,
+                            limit: Limit = 24, offset: Offset = 0, archived: bool = False):
+    parent = project(db, user, item_id)
+    query = select(Reference).join(DeliverableType).where(DeliverableType.project_id == parent.id)
+    query = query.where(DeliverableType.archived_at.is_not(None) if archived
+                        else DeliverableType.archived_at.is_(None))
+    return page(db, query.order_by(Reference.created_at.desc(), Reference.id.desc()),
+                limit, offset, lambda item: ref_data(item, db.get(DeliverableType, item.deliverable_type_id), parent))
+
+
 @router.post("/references", status_code=201)
 def create_reference(body: ReferenceInput, db: DB, user: User):
     parent = project(db, user, body.project_id)
@@ -306,6 +317,48 @@ def update_reference(item_id: UUID, body: NoteInput, db: DB, user: User):
         item.design_note = body.design_note
     db.commit()
     return ref_data(item, kind, parent)
+
+
+@router.get("/references/{item_id}/generation-source")
+def generation_source(item_id: UUID, db: DB, user: User, response: Response,
+                      version: str | None = None):
+    """Read only this user's saved image into bounded request memory; never persist it."""
+    import base64
+    import hashlib
+    import http.client
+    import io
+    import json
+    import time
+    from PIL import Image
+    from app.api.preview import fetch, PreviewUnavailable
+    from app.api.generation_provider import decode_image, ProviderFailure
+
+    response.headers["Cache-Control"] = "no-store"
+    item, _, _ = reference(db, user, item_id)
+    saved = item.preview_url
+    actual = hashlib.sha256(json.dumps(saved, sort_keys=True, ensure_ascii=False,
+                                       separators=(",", ":")).encode()).hexdigest()
+    if version is not None and version != actual:
+        fail(409, "PREVIEW_CHANGED", "이미지가 변경됐습니다. 입력을 새로고침해 주세요.")
+    if not saved:
+        fail(422, "IMAGE_MISSING", "저장된 이미지가 없습니다. 이미지를 교체해 주세요.")
+    try:
+        if saved.startswith("data:image/"):
+            image = saved
+        else:
+            status, raw, _, _ = fetch(saved, time.monotonic() + 10, limit=8 * 1024 * 1024)
+            if status != 200:
+                raise ValueError("Unavailable image")
+            with Image.open(io.BytesIO(raw)) as picture:
+                mime = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}.get(picture.format)
+            if mime is None:
+                raise ValueError("Unsupported image")
+            image = f"data:{mime};base64," + base64.b64encode(raw).decode()
+        decode_image(image)
+    except (PreviewUnavailable, ProviderFailure, ValueError, OSError, TimeoutError,
+            http.client.HTTPException, Image.DecompressionBombError):
+        fail(422, "IMAGE_UNAVAILABLE", "이 이미지를 사용할 수 없습니다. PNG·JPEG·WebP 이미지로 교체해 주세요.")
+    return {"image": image}
 
 
 @router.get("/preferences")

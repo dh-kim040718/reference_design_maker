@@ -84,6 +84,29 @@ def save(client, project, kind, **fields):
     )
 
 
+def test_saved_generation_source_is_bounded_private_and_not_persisted(library_client, owner, monkeypatch):
+    import base64
+    from test_generations import image
+    from app.api.preview import PreviewUnavailable
+    project, kind = setup_path(library_client)
+    ref = save(library_client, project, kind, preview_url="https://i.pinimg.com/cover.png", preview_source="page_metadata").json()
+    path = f"/api/v1/references/{ref['id']}/generation-source"
+    raw = base64.b64decode(image().split(',')[1])
+    def fetch(url, deadline, limit):
+        assert url == "https://i.pinimg.com/cover.png" and limit == 8 * 1024 * 1024
+        return 200, raw, "image/png", url
+    monkeypatch.setattr("app.api.preview.fetch", fetch)
+    response = library_client.get(path)
+    assert response.status_code == 200 and response.json()["image"] == image()
+    assert response.headers["cache-control"] == "no-store"
+    assert library_client.get(f"/api/v1/references/{ref['id']}").json()["preview_url"] == ref["preview_url"]
+    assert library_client.get(path + "?version=stale").status_code == 409
+    monkeypatch.setattr("app.api.preview.fetch", lambda *args, **kwargs: (_ for _ in ()).throw(PreviewUnavailable("unsafe_url")))
+    assert library_client.get(path).status_code == 422
+    library_client.app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(id=uuid4(), email="other@example.com")
+    assert library_client.get(path).status_code == 404
+
+
 def test_save_revisit_note_and_last_path(library_client, owner):
     project, kind = setup_path(library_client)
     result = save(library_client, project, kind)
@@ -95,6 +118,9 @@ def test_save_revisit_note_and_last_path(library_client, owner):
     assert library_client.get(f"/api/v1/references/{item['id']}").json() == item
     listing = library_client.get(f"/api/v1/deliverable-types/{kind['id']}/references").json()
     assert listing["total"] == 1 and listing["items"][0]["id"] == item["id"]
+    project_listing = library_client.get(f"/api/v1/projects/{project['id']}/references").json()
+    assert project_listing["total"] == 1 and project_listing["items"][0]["id"] == item["id"]
+    assert library_client.get(f"/api/v1/projects/{uuid4()}/references").status_code == 404
     assert library_client.get("/api/v1/preferences").json()["last_path"] == {
         "project_id": project["id"],
         "deliverable_type_id": kind["id"],

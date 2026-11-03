@@ -6,6 +6,9 @@
   width: 100%;
   margin-top: 12px;
 }
+.reference-location-tags {display:flex;flex-wrap:wrap;gap:5px;margin:0 0 8px}
+.reference-location-tag {display:inline-block;max-width:100%;box-sizing:border-box;padding:3px 7px;border-radius:5px;background:#edf0e9;color:#50634e;font-size:11px;line-height:1.4;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reference-location-tag:hover {background:#dfe8d9}
 
 a {
   color: inherit;
@@ -35,7 +38,7 @@ button:hover, .button:hover {
 
 button:disabled {
   opacity: .5;
-  cursor: wait;
+  cursor: not-allowed;
 }
 
 .secondary {
@@ -713,6 +716,11 @@ input::placeholder, textarea::placeholder {
   text-decoration: none;
   display: block;
 }
+
+.reference-card>.card-preview {margin-bottom:8px}
+.reference-card>.domain {margin:0 0 10px;line-height:1.5}
+.reference-card>.reference-location-tags {margin:0 0 8px;gap:6px}
+.reference-card>.reference-location-tags+h2 {margin-top:0}
 
 .reference-card, .project-card {
   min-height: 0;
@@ -1462,3 +1470,193 @@ input::placeholder, textarea::placeholder {
 .region-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:12px; border:1px solid #d8dfd4; min-width:0; }
 .region-fields label { min-width:0; }
 .region-fields input { width:100%; box-sizing:border-box; }
+
+.project-concept-navigation {display:flex;align-items:center;justify-content:space-between;gap:16px;margin:12px 0 24px}
+.project-concept-navigation .tabs {margin:0}
+.concept-brief,.concept-inputs,.concept-submit {background:#fff;border:1px solid #d8dfd4;border-radius:16px;padding:24px;margin:20px 0}
+.project-concepts .tabs button,.project-concepts .tabs span {padding:12px 16px}
+.concept-reference-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:20px 0}
+.concept-reference {padding:18px;border:1px solid #d8dfd4;border-radius:12px;min-width:0}
+.concept-reference .section-heading {align-items:flex-start;gap:12px;overflow-wrap:anywhere}
+.concept-reference .section-heading span {font-size:12px;color:#687668;flex-shrink:0}
+.concept-image {background:#f3f5ef;min-height:160px;display:grid;place-items:center;margin:16px 0;border-radius:8px;overflow:hidden}
+.concept-image img {display:block;max-width:100%;height:200px;object-fit:contain}
+.concept-image p {padding:20px;color:#687668}
+.concept-note {white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+.concept-reference input[type=file] {max-width:100%}
+.concept-snapshot-note {padding:14px 0;border-top:1px solid #d8dfd4;overflow-wrap:anywhere}
+@media(max-width:720px) {.concept-reference-grid {grid-template-columns:1fr}.project-concept-navigation {align-items:stretch;flex-direction:column}.concept-brief,.concept-inputs,.concept-submit {padding:16px}.concept-inputs>.section-heading {align-items:stretch;flex-direction:column}.concept-reference .section-heading {flex-direction:column}}
+
+/* Project concept workspace: references beside compact generation settings. */
+.reference-list-toolbar {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:12px 0;margin-bottom:8px;border-bottom:1px solid #d8dfd4}
+.reference-list-toolbar .project-type-filters {margin:0;flex:1;min-width:0}
+.filter-caption {font-size:12px;color:#687668;margin-right:4px}
+.reference-status-filter {display:flex;align-items:center;gap:8px;font-size:12px;color:#687668;flex-shrink:0;margin:0}
+.reference-status-filter select {width:auto;min-height:32px;padding:5px 28px 5px 10px;font-size:12px;background-color:transparent;margin:0}
+.project-type-filters {display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:16px 0}
+.project-type-filters a {display:inline-block;padding:6px 12px;border:1px solid #d8dfd4;border-radius:8px;font-size:13px}
+.project-type-filters a.active {background:#e5ece0;border-color:#9bae92}
+.reference-toolbar-actions {display:flex;align-items:center;gap:12px;flex-shrink:0}
+.reference-toolbar-actions .classification-generate {min-height:32px;padding:6px 10px;font-size:12px}
+@media(max-width:720px) {.reference-toolbar-actions {flex-wrap:wrap;justify-content:flex-end;max-width:100%}}
+.classification-manager {position:relative}
+.classification-manager>summary {list-style:none;cursor:pointer;font-size:12px;color:#606a62;padding:7px 9px;border-radius:6px;white-space:nowrap}
+.classification-manager>summary::-webkit-details-marker {display:none}
+.classification-manager>summary:hover,.classification-manager[open]>summary {background:#e5ece0;color:#365c43}
+.classification-manager>summary:focus-visible {outline:2px solid #365c43;outline-offset:2px}
+.classification-panel {position:absolute;right:0;top:calc(100% + 6px);width:320px;max-width:calc(100vw - 40px);box-sizing:border-box;padding:14px;background:#fff;border:1px solid #d8dfd4;border-radius:10px;box-shadow:0 8px 24px #2430221a;z-index:20}
+.classification-panel>strong {display:block;font-size:13px;margin-bottom:10px}
+.classification-rows {max-height:280px;overflow:auto}
+.classification-row {display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid #edf0e9}
+.classification-row>span {min-width:0;overflow-wrap:anywhere;font-size:13px}
+.classification-row>div {display:flex;flex-shrink:0;gap:2px}
+.classification-panel button {min-height:32px;padding:5px 7px;font-size:12px}
+.classification-panel .classification-add {border-top:1px solid #edf0e9;border-radius:0;margin-top:8px;padding-top:10px;width:100%;justify-content:flex-start}
+@media(max-width:720px) {
+  .classification-panel {position:fixed;inset:50% 16px auto;width:auto;max-width:none;max-height:calc(100dvh - 64px);overflow-y:auto;transform:translateY(-50%)}
+}
+
+/* Library hierarchy: app bar, project header, navigation, collection controls. */
+.app-workspace>.topbar {min-height:60px;gap:16px}
+.app-workspace>.main-content {padding-top:16px}
+.app-workspace .topbar .brand-mark {width:30px;height:30px;border-radius:9px}
+.app-workspace .topbar .account {gap:12px}
+.app-workspace .topbar button,.app-workspace .topbar .button {min-height:32px;padding:6px 10px;font-size:12px}
+.library-workspace {--library-gap:16px}
+.project-library-header {display:flex;align-items:center;gap:16px;min-height:44px;border-bottom:1px solid #dde2da}
+.project-library-header .project-back {font-size:18px;text-decoration:none;color:#687668;padding:8px 4px;flex-shrink:0}
+.project-library-header h1 {font-size:20px;line-height:28px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.project-library-tabs {display:flex;align-self:stretch;align-items:stretch;gap:20px;margin-left:8px}
+.project-library-tabs a {display:flex;align-items:center;padding:10px 0;font-size:13px;text-decoration:none;color:#687668;white-space:nowrap;border-bottom:2px solid transparent}
+.project-library-tabs a.active {border-color:#365c43;color:#365c43;font-weight:700}
+.project-reference-count {font-size:12px;color:#687668;white-space:nowrap}
+.project-library-header .project-add {margin-left:auto;min-height:32px;padding:6px 12px;font-size:12px;flex-shrink:0}
+.project-library>.reference-list-toolbar {margin-bottom:8px}
+@media(max-width:600px) {
+  .project-library-header {gap:8px;flex-wrap:wrap;padding-bottom:6px}
+  .project-library-header h1 {max-width:120px;font-size:18px}
+  .project-library-tabs {gap:12px;margin-left:0;order:4;flex:1}
+  .project-library-header .project-add {margin-left:auto}
+  .project-reference-count {order:5}
+}
+.library-workspace>.breadcrumbs {font-size:12px;gap:8px;line-height:20px;margin:0 0 8px}
+.library-workspace>.page-heading {margin:0 0 12px;gap:16px;align-items:center}
+.library-workspace>.page-heading .eyebrow {display:none}
+.library-workspace>.page-heading h1 {font-size:26px;line-height:36px}
+.library-workspace>.page-heading .button {min-height:36px;padding:7px 14px;font-size:13px}
+.library-workspace>.project-concept-navigation {margin:0;display:block;border-bottom:1px solid #dde2da}
+.library-workspace .project-concept-navigation .tabs {gap:24px;border:0}
+.library-workspace .project-concept-navigation .tabs a {padding:8px 2px 10px;font-size:13px}
+.library-workspace>.reference-list-toolbar {padding:10px 0;margin:0;border:0;gap:8px 16px}
+.library-workspace .project-type-filters {gap:6px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
+.library-workspace .project-type-filters>a,.library-workspace .project-type-filters>.filter-caption {flex-shrink:0;white-space:nowrap}
+.library-workspace .project-type-filters a {padding:5px 10px;line-height:18px;text-decoration:none;border-radius:6px;font-size:12px}
+.library-workspace .project-type-filters a:not(.active) {border-color:transparent}
+.library-workspace .project-type-filters a:hover {background:#edf0e9}
+.library-workspace .project-type-filters button {min-height:30px;padding:4px 6px;font-size:12px}
+.library-workspace>.list-caption {margin:2px 0 12px;font-size:12px;line-height:20px}
+.library-workspace>.card-grid {gap:16px}
+@media(max-width:720px) {
+  .app-workspace>.topbar {min-height:56px;padding:8px 0;box-sizing:border-box}
+  .app-workspace>.main-content {padding-top:12px}
+  .library-workspace>.page-heading {flex-direction:row;align-items:center;margin-bottom:8px}
+  .library-workspace>.page-heading h1 {font-size:23px;overflow-wrap:anywhere}
+  .library-workspace>.page-heading>div:first-child {min-width:0}
+  .library-workspace>.page-heading .button {font-size:12px;padding:7px 10px}
+  .library-workspace>.reference-list-toolbar {align-items:flex-start}
+  .library-workspace .reference-status-filter {gap:4px}
+}
+.project-concepts {display:grid;grid-template-columns:minmax(0,1fr) 330px;grid-template-rows:auto min-content minmax(min-content,1fr);gap:14px 20px;align-items:start}
+.project-concepts>.breadcrumbs,.project-concepts>.page-heading,.project-concepts>.tabs,
+.project-concepts>.error,.project-concepts>.notice {grid-column:1/-1;margin:0}
+.project-concepts>.breadcrumbs {gap:8px;font-size:12px}
+.project-concepts>.page-heading {padding:0}
+.project-concepts .eyebrow {display:none}
+.project-concepts h1 {font-size:26px;margin:0 0 4px}
+.project-concepts .subtitle {margin:0;font-size:13px}
+.project-concepts>.tabs {margin-bottom:2px}
+.project-concepts .tabs button,.project-concepts .tabs span {padding:8px 14px}
+.project-concepts .concept-brief,.project-concepts .concept-inputs,.project-concepts .concept-submit {padding:16px;margin:0;border-radius:12px;min-width:0}
+.project-concepts h2 {font-size:15px;margin:0 0 12px}
+.project-concepts label {font-size:12px}
+.project-concepts textarea {min-height:0;padding:10px;font-size:13px;line-height:1.5}
+.project-concepts .hint {font-size:12px;line-height:1.5;margin:8px 0}
+.project-concepts button {min-height:34px;padding:7px 10px;font-size:12px}
+.project-concepts>.project-library-header {grid-column:1/-1}
+.project-concepts>.project-library-header h1 {font-size:20px;margin:0;line-height:28px}
+.project-concepts>.concept-brief {grid-column:2;grid-row:2}
+.project-concepts>.concept-inputs {grid-column:1;grid-row:2/4}
+.project-concepts>.concept-submit {grid-column:2;grid-row:3}
+.concept-inputs>.section-heading {display:flex;flex-wrap:wrap;justify-content:flex-start;gap:8px}
+.concept-inputs>.section-heading h2 {width:100%;margin:0 0 2px}
+.project-concepts .concept-reference-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.project-concepts .concept-reference {display:grid;grid-template-columns:80px minmax(0,1fr);gap:5px 10px;padding:12px;border-radius:8px;align-content:start}
+.project-concepts .concept-image {grid-column:1;grid-row:1/4;min-height:90px;height:100px;margin:0}
+.project-concepts .concept-image img {width:100%;height:100px;object-fit:contain}
+.project-concepts .concept-image p {font-size:11px;padding:8px;margin:0;text-align:center}
+.concept-reference>.section-heading {grid-column:2;display:flex;flex-direction:column;margin:0;font-size:13px;gap:2px}
+.concept-reference>.section-heading span {font-size:11px}
+.concept-input-status {grid-column:2;font-size:11px;color:#89633b;margin:0}
+.concept-input-status.ready {color:#376448}
+.project-concepts .concept-note {grid-column:2;font-size:13px;margin:0;line-height:1.5}
+.concept-reference-actions {grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px}
+.concept-upload {position:relative;display:inline-flex;align-items:center;padding:7px 10px;min-height:34px;box-sizing:border-box;border:1px solid #cbd6c7;border-radius:8px;cursor:pointer;overflow:hidden}
+.concept-upload input {position:absolute;inset:0;opacity:0;width:100%;cursor:pointer}
+.concept-upload:focus-within {outline:2px solid #376448;outline-offset:2px}
+.concept-upload:has(input:disabled) {opacity:.5;cursor:default}
+.concept-help summary,.project-concepts>.generation-history summary {cursor:pointer;font-size:12px;font-weight:600}
+.project-concepts .generation-policy {padding:12px;margin:12px 0;border-radius:8px}
+.project-concepts .generation-policy strong {font-size:13px}
+.project-concepts .rights-check {font-size:12px;margin:12px 0;gap:8px}
+.concept-brief>label,.concept-submit>label:not(.rights-check) {display:block;margin:0 0 12px;line-height:1.5}
+.concept-brief>label textarea,.concept-submit>label textarea {display:block;margin-top:8px;width:100%;box-sizing:border-box}
+.concept-submit>.generation-policy {margin:12px 0}
+.concept-submit>.rights-check {clear:both;line-height:1.5}
+.concept-submit>button {display:flex;width:100%;margin-top:12px}
+.project-concepts>.generation-history {grid-column:1;margin:0;padding:12px 0;border-top:1px solid #d8dfd4}
+.concept-metrics {grid-column:2}
+.concept-metrics>.generation-policy {border:0;padding:0;margin:0}
+@media(max-width:960px) {
+  .project-concepts {grid-template-columns:minmax(0,1fr) 290px;gap:12px}
+  .project-concepts .concept-reference {grid-template-columns:80px minmax(0,1fr);gap:5px 10px}
+  .project-concepts .concept-image,.project-concepts .concept-image img {height:80px;min-height:80px}
+}
+@media(max-width:720px) {
+  .project-concepts {display:flex;flex-direction:column;gap:12px}
+  .project-concepts>* {width:100%;box-sizing:border-box}
+  .project-concepts h1 {font-size:23px}
+  .project-concepts .concept-reference-grid {grid-template-columns:1fr}
+  .project-concepts .concept-reference .section-heading {flex-direction:column;gap:2px}
+  .project-concepts .concept-inputs>.section-heading {flex-direction:row;align-items:center}
+  .project-concepts .concept-reference-actions {grid-column:1/-1}
+}
+
+/* Consistent reference-card anatomy and a single aligned action row. */
+.project-concepts .concept-reference {display:flex;flex-direction:column;gap:12px;padding:12px;min-width:0}
+.concept-reference-main {display:flex;flex-direction:column;gap:12px;min-width:0}
+.project-concepts .concept-reference .concept-image {width:100%;height:auto;min-height:0;aspect-ratio:16/10;grid-column:auto;grid-row:auto;margin:0}
+.project-concepts .concept-reference .concept-image img {height:100%;width:100%;min-height:0;object-fit:contain}
+.concept-reference-info {display:flex;flex-direction:column;gap:5px;min-width:0;width:100%}
+.project-concepts button.concept-reference-title {display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-align:left;overflow-wrap:anywhere;min-height:36px;max-height:36px;line-height:18px;padding:0;margin:0;border:0;border-radius:0;background:none;color:#242b26;font-size:13px;font-weight:650}
+.project-concepts button.concept-reference-title:hover {color:#365c43;text-decoration:underline}
+.concept-reference-type {font-size:11px;color:#687668;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:16px}
+.concept-reference-info .concept-input-status {display:block;font-size:11px;line-height:16px;margin:0}
+.project-concepts .concept-reference .concept-note {grid-column:auto;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:18px;font-size:12px;min-height:36px;margin:0;color:#606a62}
+.project-concepts .concept-reference-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding-top:10px;border-top:1px solid #edf0e9;margin:0;margin-top:auto;align-items:stretch}
+.project-concepts .concept-reference-actions>button,.project-concepts .concept-reference-actions>.concept-upload {display:flex;align-items:center;justify-content:center;min-height:32px;height:32px;padding:5px 6px;margin:0;box-sizing:border-box;border-radius:6px;font-size:11px;line-height:20px;white-space:nowrap}
+.project-concepts .concept-reference-actions>.concept-upload input {margin:0;min-height:0;height:100%;padding:0}
+.concept-image-recovery {border-top:1px solid #edf0e9;padding-top:8px;margin-top:auto}
+.concept-image-recovery p {font-size:12px;line-height:1.5;color:#915c35;margin:0 0 8px}
+.concept-image-recovery .concept-upload {min-height:32px;margin:0;font-size:12px}
+.concept-image-recovery .concept-upload input {margin:0}
+.concept-selection-toolbar {display:flex;align-items:center;gap:12px;padding:8px 0;margin-top:4px;font-size:12px}
+.project-concepts .concept-selection-toolbar>label {display:flex;align-items:center;gap:7px;margin:0;cursor:pointer;white-space:nowrap}
+.concept-selection-toolbar>span {margin-left:auto;color:#687668;font-variant-numeric:tabular-nums}
+.project-concepts .concept-selection-toolbar button {min-height:30px;padding:4px 6px}
+.project-concepts .concept-selection-toolbar input,.project-concepts .concept-card-select input {width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:#365c43;cursor:pointer}
+.project-concepts .concept-reference {position:relative;transition:border-color .15s,background-color .15s}
+.project-concepts .concept-reference.is-selected {border-color:#819a77}
+.concept-reference.is-excluded .concept-image {opacity:.5}
+.project-concepts .concept-card-select {position:absolute;top:18px;left:18px;z-index:1;display:grid;place-items:center;width:30px;height:30px;margin:0;border-radius:7px;background:#fffffff2;box-shadow:0 1px 4px #0002;cursor:pointer}
+.concept-card-select:focus-within {outline:2px solid #365c43;outline-offset:2px}
+.concept-card-select .sr-only {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}

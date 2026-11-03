@@ -86,14 +86,14 @@ try {
   let deleted=false
   if(process.argv.includes('--delete')){
     await click('결과 삭제')
-    await until("document.body.innerText.includes('생성 이력')")
+    await until("document.body.innerText.includes('프로젝트 시안 이력') || document.body.innerText.includes('생성 이력')")
     await command('Page.navigate',{url:new URL(`/generations/${report.id}`,url).href})
     await until("!!document.querySelector('[role=alert]')")
     if(await evaluate("!!document.querySelector('.generated-image')"))throw new Error('Deleted image resurrected')
     deleted=true
   }else{
     await click('생성 화면으로')
-    await until("document.body.innerText.includes('생성 이력')")
+    await until("document.body.innerText.includes('프로젝트 시안 이력') || document.body.innerText.includes('생성 이력')")
   }
   await click('로그아웃')
   await until("!!document.querySelector('input[type=email]')")

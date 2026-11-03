@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from sqlalchemy import inspect, select, text
+from sqlalchemy import MetaData, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -16,7 +16,7 @@ from app.db.base import Base
 from app.db.models import Generation, GenerationBudget, Reference, now
 from app.db.session import build_engine
 
-SCHEMA = "0008_budget_reservations"
+SCHEMA = "0009_project_concepts"
 FORMAT = "rdm-app-backup-v1"
 ROOT = REPOSITORY_ROOT / ".phase6-backups"
 
@@ -57,11 +57,19 @@ def snapshot(engine, destination):
                 connection.execute(text("SET TRANSACTION READ ONLY"))
             elif engine.dialect.name == "sqlite":
                 connection.exec_driver_sql("BEGIN")
-            if connection.scalar(text("SELECT version_num FROM alembic_version")) != SCHEMA:
+            version = connection.scalar(text("SELECT version_num FROM alembic_version"))
+            if version not in {"0007_safe_diagnostics", "0008_budget_reservations", SCHEMA}:
                 raise ValueError("Unsupported application schema")
+            metadata = Base.metadata
+            if version != SCHEMA:
+                names = set(Base.metadata.tables)
+                if version == "0007_safe_diagnostics":
+                    names.remove("generation_budget")
+                metadata = MetaData()
+                metadata.reflect(bind=connection, only=sorted(names))
             tables = {table.name: table_rows(connection, table)
-                      for table in Base.metadata.sorted_tables}
-    data = {"format": FORMAT, "schema": SCHEMA, "created_at": now().isoformat(),
+                      for table in metadata.sorted_tables}
+    data = {"format": FORMAT, "schema": version, "created_at": now().isoformat(),
             "scope": "app_tables_only_not_supabase_auth", "tables": tables}
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -77,8 +85,9 @@ def load_snapshot(path):
     try:
         package = json.loads(Path(path).read_text("utf-8"))
         data = package["snapshot"]
+        supported = {"0007_safe_diagnostics", "0008_budget_reservations", SCHEMA}
         if (package["sha256"] != digest(data) or data["format"] != FORMAT
-                or data["schema"] not in {"0007_safe_diagnostics", SCHEMA}):
+                or data["schema"] not in supported):
             raise ValueError("Integrity or version mismatch")
         if data["schema"] == "0007_safe_diagnostics":
             # In-memory upgrade only; retain the original archive and unknown historical charges.
@@ -86,6 +95,18 @@ def load_snapshot(path):
             for row in data["tables"]["generations"]:
                 row["reserved_micro_usd"] = None
             data["restored_from_schema"] = data["schema"]
+            data["schema"] = "0008_budget_reservations"
+        if data["schema"] == "0008_budget_reservations":
+            kinds = {row["id"]: row["project_id"] for row in data["tables"]["deliverable_types"]}
+            references = {row["id"]: kinds[row["deliverable_type_id"]]
+                          for row in data["tables"]["references"]}
+            for row in data["tables"]["projects"]:
+                row.setdefault("brief", "")
+            for row in data["tables"]["generations"]:
+                row.setdefault("project_id", references.get(row["reference_id"]))
+                row.setdefault("scope", "reference")
+                row.setdefault("project_snapshot_json", None)
+            data.setdefault("restored_from_schema", data["schema"])
             data["schema"] = SCHEMA
         expected = {table.name for table in Base.metadata.sorted_tables}
         if set(data["tables"]) != expected:

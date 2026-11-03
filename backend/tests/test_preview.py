@@ -100,6 +100,16 @@ def test_tls_context_keeps_certificate_and_hostname_verification():
     assert context.cert_store_stats()["x509_ca"] > 0
 
 
+def test_pinterest_public_pin_metadata_fallback(monkeypatch):
+    monkeypatch.setattr(preview, "public_address", lambda url, *args: (urlsplit(url), "93.184.216.34"))
+    monkeypatch.setattr(preview, "_get_preview", lambda url: {"status": "unavailable", "preview_url": None, "reason": "site_restricted"})
+    monkeypatch.setattr(preview, "fetch", lambda url, *args, **kwargs: (200, b'<meta property="og:image" content="https://i.pinimg.com/cover.jpg">', "text/html", url))
+    assert preview.get_preview("https://kr.pinterest.com/pin/123/")["preview_url"] == "https://i.pinimg.com/cover.jpg"
+    assert preview.get_preview("https://pinterest.com.evil.test/pin/123/")["status"] == "unavailable"
+    monkeypatch.setattr(preview, "public_address", lambda *args: (_ for _ in ()).throw(preview.PreviewUnavailable("unsafe_url")))
+    assert preview.get_preview("https://kr.pinterest.com/pin/123/")["status"] == "unavailable"
+
+
 def test_pinterest_uses_public_oembed_instead_of_crawling_pin_page(monkeypatch):
     monkeypatch.setattr(
         preview, "public_address", lambda url, *args: (urlsplit(url), "93.184.216.34")

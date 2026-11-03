@@ -107,17 +107,28 @@ def generate_image(source: str, prompt: str, safety_id: str) -> tuple[str, dict]
     return request_image(source, prompt, safety_id)
 
 
+def generate_project(images: list[str], prompt: str, safety_id: str) -> tuple[str, dict]:
+    return request_image(images, prompt, safety_id)
+
+
+def get_project_provider():
+    return generate_project
+
+
 def edit_image(source: str, mask: str, prompt: str, safety_id: str) -> tuple[str, dict]:
     return request_image(source, prompt, safety_id, mask=mask)
 
 
-def request_image(source: str, prompt: str, safety_id: str, mask=None) -> tuple[str, dict]:
+def request_image(source: str | list[str], prompt: str, safety_id: str,
+                  mask=None) -> tuple[str, dict]:
     key = get_settings().openai_api_key
     if not key:
         raise ProviderFailure("NOT_CONFIGURED")
     context = ssl.create_default_context()
     context.load_verify_locations(certifi.where())
-    payload = {"model": MODEL, "images": [{"image_url": source}], "prompt": prompt,
+    images = source if isinstance(source, list) else [source]
+    payload = {"model": MODEL, "images": [{"image_url": image} for image in images],
+               "prompt": prompt,
                "n": 1, "size": "1024x1024", "quality": "low",
                "output_format": "png", "safety_identifier": safety_id}
     if mask is not None:

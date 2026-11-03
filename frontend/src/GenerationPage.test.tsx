@@ -68,6 +68,26 @@ it('opens regeneration preparation without sending another paid request', async 
   expect(api).not.toHaveBeenCalledWith(expect.anything(), 'POST', expect.anything())
 })
 
+it('shows immutable project inputs and regenerates at project scope without a reference id', async () => {
+  vi.mocked(api).mockResolvedValue({id: 'project-job', reference_id: null, project_id: 'p', scope: 'project', status: 'succeeded', result_image: source, note_snapshot: '프로젝트 목표', project_snapshot: {project_name: '물류', brief: '프로젝트 목표', references: [{id: 'a', title: '레이아웃', type_name: '화면', design_note: '기존 레이아웃 메모'}, {id: 'b', title: '그래프', type_name: '차트', design_note: '기존 차트 메모'}]}})
+  const navigate = vi.fn()
+  render(<GenerationPage jobId="project-job" navigate={navigate} />)
+  expect(await screen.findByText('검토한 레퍼런스 2개')).toBeInTheDocument()
+  expect(screen.getByText('기존 레이아웃 메모')).toBeInTheDocument()
+  expect(screen.getByText('기존 차트 메모')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', {name: '전체 재생성 준비'}))
+  expect(navigate).toHaveBeenCalledWith('/projects/p/generate?from=project-job')
+})
+
+it('labels historical single-reference results and points new work to the project', async () => {
+  vi.mocked(api).mockResolvedValue({id: 'old', reference_id: 'ref', project_id: 'p', scope: 'reference', status: 'succeeded', note_snapshot: ''})
+  const navigate = vi.fn()
+  render(<GenerationPage jobId="old" navigate={navigate} />)
+  expect(await screen.findByText('과거 단일 참고 시안')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', {name: '프로젝트 전체 시안 만들기'}))
+  expect(navigate).toHaveBeenCalledWith('/projects/p/generate')
+})
+
 it('shows a safe billing hint while preserving the no-retry warning for uncertain jobs', async () => {
   vi.mocked(api).mockResolvedValue({id: 'job', reference_id: 'ref', status: 'unknown', provider_reason: 'quota', note_snapshot: ''})
   render(<GenerationPage jobId="job" navigate={vi.fn()} />)

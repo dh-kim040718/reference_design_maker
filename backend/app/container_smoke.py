@@ -33,6 +33,7 @@ def main():
     envfile = folder / "temporary.env"
     created = []
     network_created = False
+    stage = "temporary_resources"
     try:
         database_url = url.set(host="host.docker.internal", database=source["target_database"])
         envfile.write_text(
@@ -48,6 +49,7 @@ def main():
             run("run", "--detach", "--name", name, "--network", network,
                 "--publish", "127.0.0.1:" + port, *extras, "reference-design-maker-" + service)
             created.append(name)
+        stage = "database_readiness"
         ready = False
         for _ in range(40):
             try:
@@ -61,17 +63,37 @@ def main():
             time.sleep(.5)
         if not ready:
             raise RuntimeError("Container readiness failed")
+        stage = "spa_html"
         with urllib.request.urlopen("http://127.0.0.1:18080/", timeout=5) as reply:
-            if b'<div id="root">' not in reply.read():
+            html = reply.read()
+            if b'<div id="root">' not in html:
                 raise RuntimeError("SPA response failed")
+        stage = "project_api_contract"
+        with urllib.request.urlopen("http://127.0.0.1:18000/openapi.json", timeout=5) as reply:
+            paths = json.load(reply)["paths"]
+        required = {"/api/v1/projects/{project_id}/generation-context",
+                    "/api/v1/projects/{project_id}/generations",
+                    "/api/v1/projects/{project_id}/brief"}
+        if not required.issubset(paths):
+            raise RuntimeError("Project workflow missing from API image")
+        stage = "project_web_bundle"
+        match = re.search(rb'<script[^>]+src="([^"]+)"', html)
+        if not match or not match[1].startswith(b"/assets/"):
+            raise RuntimeError("SPA bundle missing")
+        asset = "http://127.0.0.1:18080" + match[1].decode()
+        with urllib.request.urlopen(asset, timeout=5) as reply:
+            if b"generation-context" not in reply.read():
+                raise RuntimeError("Project workflow missing from web image")
         report = {"spa": "passed", "api_proxy_db_readiness": "passed",
+                  "project_workflow_api_and_bundle": "passed",
                   "database": source["target_database"], "provider_keys_injected": False,
                   "provider_calls": 0, "temporary_resources_cleanup": "requested"}
         (folder / "report.json").write_text(json.dumps(report, indent=2), "utf-8")
         print(json.dumps({"verified": True, "report": str(folder / "report.json")}))
     except (subprocess.CalledProcessError, RuntimeError, OSError):
         raise SystemExit(
-            "Container smoke failed; raw logs suppressed. No provider key injected.") from None
+            f"Container smoke failed at {stage}; raw logs suppressed. "
+            "No provider key injected.") from None
     finally:
         for name in reversed(created):
             subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)

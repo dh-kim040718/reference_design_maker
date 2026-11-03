@@ -49,7 +49,7 @@ def test_local_postgresql_accepts_connections_and_alembic_migrations() -> None:
             assert connection.execute(text("SELECT 1")).scalar_one() == 1
             assert (
                 connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                == "0008_budget_reservations"
+                == "0009_project_concepts"
             )
     finally:
         engine.dispose()
