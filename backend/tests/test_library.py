@@ -107,11 +107,40 @@ def test_saved_generation_source_is_bounded_private_and_not_persisted(library_cl
     assert library_client.get(path).status_code == 404
 
 
+@pytest.mark.parametrize('format,mime', [('PNG', 'image/png'), ('JPEG', 'image/jpeg'), ('WEBP', 'image/webp')])
+def test_saved_remote_image_formats_are_accepted(library_client, owner, monkeypatch, format, mime):
+    import io
+    from PIL import Image
+    output = io.BytesIO()
+    Image.new('RGB', (100, 100), 'white').save(output, format=format)
+    project, kind = setup_path(library_client)
+    ref = save(library_client, project, kind, preview_url='https://i.pinimg.com/cover.jpg', preview_source='page_metadata').json()
+    monkeypatch.setattr('app.api.preview.fetch', lambda url, *args, **kwargs: (200, output.getvalue(), mime, url))
+    response = library_client.get(f"/api/v1/references/{ref['id']}/generation-source")
+    assert response.status_code == 200, response.text
+    assert response.json()['image'].startswith(f'data:{mime};base64,')
+
+
+def test_image_connection_failure_is_retryable_and_invalid_file_is_not(library_client, owner, monkeypatch):
+    project, kind = setup_path(library_client)
+    ref = save(library_client, project, kind, preview_url='https://i.pinimg.com/cover.jpg', preview_source='page_metadata').json()
+    path = f"/api/v1/references/{ref['id']}/generation-source"
+    monkeypatch.setattr('app.api.preview.fetch', lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError()))
+    response = library_client.get(path)
+    assert response.status_code == 503 and response.json()['detail']['code'] == 'IMAGE_DOWNLOAD_FAILED'
+    monkeypatch.setattr('app.api.preview.fetch', lambda url, *args, **kwargs: (200, b'not an image', 'image/jpeg', url))
+    assert library_client.get(path).status_code == 422
+
+
 def test_save_revisit_note_and_last_path(library_client, owner):
     project, kind = setup_path(library_client)
+    listing = library_client.get('/api/v1/projects').json()
+    assert next(row for row in listing['items'] if row['id'] == project['id'])['reference_count'] == 0
     result = save(library_client, project, kind)
     assert result.status_code == 201, result.text
     item = result.json()
+    listing = library_client.get('/api/v1/projects').json()
+    assert next(row for row in listing['items'] if row['id'] == project['id'])['reference_count'] == 1
     assert item["title"] is None and item["design_note"] is None
     assert item["source_url"] == "https://example.com/design?view=full#hero"
     assert item["created_at"].endswith("Z") or item["created_at"].endswith("+00:00")

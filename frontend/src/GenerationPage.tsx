@@ -4,7 +4,7 @@ import { RegionPrototype } from './RegionPrototype'
 import { GenerationMetrics } from './GenerationMetrics'
 
 interface Policy {enabled: boolean; remaining: number; daily_limit: number; model: string; reason?: string}
-interface Job {id: string; reference_id: string | null; project_id?: string | null; scope?: string; status: string; operation?: string; direction?: string; instruction: string; note_snapshot: string; result_image?: string | null; error_code?: string; provider_reason?: string | null; elapsed_ms?: number; usage?: {total_tokens?: number}; project_snapshot?: {project_name: string; brief: string; references: {id: string; title: string; type_name: string; design_note: string}[]}}
+interface Job {id: string; reference_id: string | null; project_id?: string | null; scope?: string; status: string; operation?: string; direction?: string; instruction: string; note_snapshot: string; result_image?: string | null; error_code?: string; provider_reason?: string | null; elapsed_ms?: number; usage?: {total_tokens?: number}; project_snapshot?: {type_id?: string; project_name: string; brief: string; references: {id: string; title: string; type_name: string; design_note: string}[]}}
 const labels: Record<string, string> = {queued: '생성 대기 중', processing: 'AI 시안 생성 중…', succeeded: '생성 완료', failed: '생성 실패', unknown: '결과 확인 필요'}
 const diagnosticMessages: Record<string, string> = {
   authentication: '서버의 AI 인증 설정을 확인해야 합니다.',
@@ -79,33 +79,38 @@ export function GenerationPage({referenceId, jobId, fromJobId, navigate}: {refer
     reader.readAsDataURL(file)
   }
   const backId = job?.reference_id || referenceId
-  const projectPath = job?.project_id ? `/projects/${job.project_id}/generate` : null
+  const projectPath = job?.project_id ? `/projects/${job.project_id}/generate${job.project_snapshot?.type_id ? `?type=${encodeURIComponent(job.project_snapshot.type_id)}` : ''}` : null
   const returnPath = projectPath || `/references/${backId}/generate`
   const activeJob = jobs.find(item => ['queued', 'processing'].includes(item.status))
-  return <section className="generation-workspace">
+  return <section className={`generation-workspace${jobId ? ' generation-result-page' : ''}`}>
     <div className="workspace-heading"><button className="text-button" onClick={() => navigate(projectPath || `/references/${backId}`)}>{projectPath ? '← 프로젝트 시안으로' : '← 레퍼런스로'}</button><span className="ai-badge">{jobId && job?.scope === 'reference' ? '과거 단일 참고 시안' : 'AI 탐색 시안'}</span></div>
-    <h1>{jobId ? '생성 결과' : '레퍼런스에서 새로운 시안 만들기'}</h1>
-    <GenerationMetrics />
-    <p className="hint">{job?.scope === 'project' ? '프로젝트 전체 레퍼런스와 각 메모를 종합한 탐색 시안입니다.' : jobId && job?.scope === 'reference' ? '이 결과는 과거의 단일 레퍼런스 생성입니다. 새 시안은 프로젝트 전체 입력으로 만드세요.' : '전체 이미지와 디자인 메모를 참고한 탐색용 이미지입니다.'} 결과는 완성 디자인이 아닙니다.</p>
+    <div className="generation-page-heading"><h1>{jobId ? '생성 결과' : '레퍼런스에서 새로운 시안 만들기'}</h1><GenerationMetrics /></div>
+    <p className="hint">{job?.scope === 'project' ? `선택한 레퍼런스 ${job.project_snapshot?.references.length ?? ''}개와 메모를 참고한 AI 탐색 시안입니다.` : jobId && job?.scope === 'reference' ? '과거 단일 레퍼런스의 AI 탐색 시안입니다.' : '전체 이미지와 디자인 메모를 참고한 탐색용 이미지입니다.'}</p>
     {error && <p className="error" role="alert">{error}</p>}
     {jobId ? job && <article className="generation-result">
       <div className="section-heading"><h2 role="status">{labels[job.status] || job.status}</h2><span>AI 생성 이미지</span></div>
       {['queued', 'processing'].includes(job.status) && <p>이 화면을 나가도 작업은 계속됩니다. 잠시 후 생성 이력에서 다시 확인할 수 있습니다.</p>}
       {['failed', 'unknown'].includes(job.status) && <p role="alert">{job.status === 'unknown' ? '요청이 전달되었을 수 있어 자동 재시도하지 않습니다. 비용과 제공자 상태를 확인해 주세요.' : '이미지를 생성하지 못했습니다. 입력과 API 설정을 확인해 주세요.'} 이 요청도 하루 사용 횟수에 포함됩니다.</p>}
       {['failed', 'unknown'].includes(job.status) && job.provider_reason && diagnosticMessages[job.provider_reason] && <p className="notice">{diagnosticMessages[job.provider_reason]}</p>}
-      {job.result_image && <><img className="generated-image" src={job.result_image} alt="AI가 생성한 탐색 시안" /><a className="button" href={job.result_image} download={`ai-concept-${job.id}.png`}>AI 시안 다운로드</a></>}
-      {job.result_image && <RegionPrototype key={job.id} source={job.result_image} referenceId={job.reference_id || undefined} direction={job.direction || job.note_snapshot} navigate={navigate} />}
+      <div className="generation-output-layout"><div className="generation-output-preview">
+      {job.result_image ? <div className="generation-image-stage"><img className="generated-image" src={job.result_image} alt="AI가 생성한 탐색 시안" /></div> : <div className="generation-image-stage generation-image-pending"><p>{labels[job.status]}<br /><span>완료되면 이곳에 시안이 표시됩니다.</span></p></div>}
+      {job.result_image && job.reference_id && <RegionPrototype key={job.id} source={job.result_image} referenceId={job.reference_id} direction={job.direction || job.note_snapshot} navigate={navigate} />}
+      </div><aside className="generation-output-sidebar" aria-label="시안 정보와 작업">
       {job.operation === 'edit' && <div className="generation-notes"><h3>영역 편집 · 유지할 디자인 방향</h3><p>{job.direction || '저장된 메모의 방향 유지'}</p></div>}
-      {job.status === 'succeeded' && <button type="button" className="secondary" onClick={() => navigate(projectPath ? job.scope === 'project' ? `${projectPath}?from=${encodeURIComponent(job.id)}` : projectPath : `/references/${job.reference_id}/generate?from=${encodeURIComponent(job.id)}`)}>{job.scope === 'reference' && projectPath ? '프로젝트 전체 시안 만들기' : '전체 재생성 준비'}</button>}
-      {job.project_snapshot && <section className="generation-notes"><h3>생성 당시 프로젝트 입력</h3><p><strong>{job.project_snapshot.project_name}</strong></p><p>{job.project_snapshot.brief}</p><h3>검토한 레퍼런스 {job.project_snapshot.references.length}개</h3>{job.project_snapshot.references.map((row, index) => <div className="concept-snapshot-note" key={row.id}><strong>{index + 1}. {row.title} · {row.type_name}</strong><p>{row.design_note || '메모 없이 이미지 참고'}</p></div>)}</section>}
-      <div className="generation-notes"><h3>생성에 사용한 메모</h3><p>{job.note_snapshot || '메모 없이 전체 이미지 참고'}</p>{job.instruction && <p>{job.instruction}</p>}</div>
-      {job.elapsed_ms != null && <p className="hint">처리 시간 {(job.elapsed_ms / 1000).toFixed(1)}초 · 사용량 {job.usage?.total_tokens != null ? `${job.usage.total_tokens} 토큰` : '제공자 사용량 미제공'} · 실제 청구액은 제공자 사용 내역에서 확인</p>}
-      {!['queued', 'processing'].includes(job.status) && <div className="form-actions"><button className="secondary" disabled={busy} onClick={async () => {
+      {job.project_snapshot && <div className="generation-result-summary"><strong>{job.project_snapshot.project_name}</strong><p className="generation-brief-excerpt" title={job.project_snapshot.brief}>{job.project_snapshot.brief}</p><span>참고 레퍼런스 {job.project_snapshot.references.length}개</span></div>}
+      {(job.result_image || job.status === 'succeeded') && <div className="generation-primary-actions">{job.result_image && <a className="button" href={job.result_image} download={`ai-concept-${job.id}.png`}>AI 시안 다운로드</a>}
+        {job.status === 'succeeded' && <button type="button" className="text-button" title="입력과 조건을 검토하는 화면으로 이동합니다" onClick={() => navigate(projectPath ? job.scope === 'project' ? `${projectPath}${projectPath.includes('?') ? '&' : '?'}from=${encodeURIComponent(job.id)}` : projectPath : `/references/${job.reference_id}/generate?from=${encodeURIComponent(job.id)}`)}>{job.scope === 'reference' && projectPath ? '프로젝트 전체 시안 만들기' : '다른 시안 만들기 →'}</button>}
+      </div>}
+      {job.project_snapshot && <details className="generation-notes"><summary>입력 내용 자세히</summary><h3>프로젝트 요구사항</h3><p>{job.project_snapshot.brief}</p><h3>검토한 레퍼런스 {job.project_snapshot.references.length}개</h3>{job.project_snapshot.references.map((row, index) => <div className="concept-snapshot-note" key={row.id}><strong>{index + 1}. {row.title} · {row.type_name}</strong><p>{row.design_note || '메모 없이 이미지 참고'}</p></div>)}</details>}
+      {(!job.project_snapshot || job.instruction) && <details className="generation-notes"><summary>{job.project_snapshot ? '추가 요청' : '생성에 사용한 메모'}</summary>{!job.project_snapshot && <p>{job.note_snapshot || '메모 없이 전체 이미지 참고'}</p>}{job.instruction && <p>{job.instruction}</p>}</details>}
+      {job.elapsed_ms != null && <details className="generation-notes"><summary>생성 정보</summary><p>처리 시간 {(job.elapsed_ms / 1000).toFixed(1)}초<br />사용량 {job.usage?.total_tokens != null ? `${job.usage.total_tokens} 토큰` : '제공자 사용량 미제공'}</p><p className="hint">실제 청구액은 제공자 사용 내역에서 확인해 주세요.</p></details>}
+      {!['queued', 'processing'].includes(job.status) && <button className="text-button generation-result-delete" disabled={busy} onClick={async () => {
         if (!window.confirm('비공개 생성 결과를 삭제할까요?')) return
         setBusy(true)
         try {await api(`/generations/${job.id}`, 'DELETE'); navigate(returnPath)}
         catch (reason) {setError(errorMessage(reason)); setBusy(false)}
-      }}>결과 삭제</button><button onClick={() => navigate(returnPath)}>생성 화면으로</button></div>}
+      }}>결과 삭제</button>}
+      </aside></div>
     </article> : reference && policy ? <>
       {previous && <div className="notice"><strong>새 요청으로 전체 재생성</strong><p>이전 추가 요청을 가져왔습니다. 저장된 현재 메모를 확인하고 원본 이미지를 다시 선택해 주세요. 생성 버튼을 누르면 별도의 사용 횟수와 비용이 발생하며 이전 결과는 유지됩니다.</p><p>이전 생성 메모: {previous.note_snapshot || '메모 없음'}</p></div>}
       <div className="generation-layout"><div className="generation-source"><h2>참고할 전체 이미지</h2>

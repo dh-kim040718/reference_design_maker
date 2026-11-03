@@ -63,7 +63,7 @@ it('opens regeneration preparation without sending another paid request', async 
   vi.mocked(api).mockResolvedValue({id: 'job', reference_id: 'ref', status: 'succeeded', result_image: source, note_snapshot: ''})
   const navigate = vi.fn()
   render(<GenerationPage jobId="job" navigate={navigate} />)
-  fireEvent.click(await screen.findByRole('button', {name: '전체 재생성 준비'}))
+  fireEvent.click(await screen.findByRole('button', {name: '다른 시안 만들기 →'}))
   expect(navigate).toHaveBeenCalledWith('/references/ref/generate?from=job')
   expect(api).not.toHaveBeenCalledWith(expect.anything(), 'POST', expect.anything())
 })
@@ -75,7 +75,7 @@ it('shows immutable project inputs and regenerates at project scope without a re
   expect(await screen.findByText('검토한 레퍼런스 2개')).toBeInTheDocument()
   expect(screen.getByText('기존 레이아웃 메모')).toBeInTheDocument()
   expect(screen.getByText('기존 차트 메모')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', {name: '전체 재생성 준비'}))
+  fireEvent.click(screen.getByRole('button', {name: '다른 시안 만들기 →'}))
   expect(navigate).toHaveBeenCalledWith('/projects/p/generate?from=project-job')
 })
 

@@ -12,6 +12,7 @@ export interface Session {
 export interface Project {
   id: string; name: string; archived_at: string | null; created_at: string; updated_at: string
   thumbnail_url?: string | null
+  reference_count?: number
   brief?: string
 }
 export interface DeliverableType extends Project {
@@ -73,8 +74,9 @@ window.addEventListener('storage', event => {
 export class ApiError extends Error {
   status: number
   fields: {field: string; message: string}[]
-  constructor(status: number, message: string, fields: {field: string; message: string}[] = []) {
-    super(message); this.status = status; this.fields = fields
+  code?: string
+  constructor(status: number, message: string, fields: {field: string; message: string}[] = [], code?: string) {
+    super(message); this.status = status; this.fields = fields; this.code = code
   }
 }
 async function responseData<T>(response: Response): Promise<T> {
@@ -83,7 +85,7 @@ async function responseData<T>(response: Response): Promise<T> {
     const fallback = response.status === 404
       ? '요청한 API를 찾을 수 없습니다. 새로고침 후에도 계속되면 서버 연결 설정을 확인해 주세요.'
       : response.status >= 500 ? '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.' : '요청을 처리하지 못했습니다.'
-    throw new ApiError(response.status, data.detail?.message ?? fallback, data.detail?.fields ?? [])
+    throw new ApiError(response.status, data.detail?.message ?? fallback, data.detail?.fields ?? [], data.detail?.code)
   }
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }

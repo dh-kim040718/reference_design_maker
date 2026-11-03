@@ -16,6 +16,7 @@ function setup({enabled = true, input = context} = {}) {
   vi.mocked(api).mockImplementation(async (path, method, body) => {
     if (path === '/projects/p/generation-context') return current
     if (path === '/generation-policy') return {enabled, remaining: 3, daily_limit: 3}
+    if (path.includes('/generation-source')) throw new ApiError(422, '저장된 이미지가 없습니다.')
     if (path === '/projects/p/generations') return method === 'POST' ? {id: 'job'} : {items: []}
     if (path === '/projects/p/brief') {current = {...current, brief: (body as {brief: string}).brief}; return {brief: current.brief}}
     throw new Error('Unexpected request')
@@ -68,6 +69,30 @@ it('prepares remote images only on CTA and sends image data instead of URLs', as
   expect(api).toHaveBeenCalledWith('/references/layout/generation-source')
   expect(api).toHaveBeenCalledWith('/references/chart/generation-source')
   expect(api).toHaveBeenCalledWith('/projects/p/generations', 'POST', expect.objectContaining({sources: [{reference_id: 'layout', image}, {reference_id: 'chart', image}]}))
+})
+
+it('retries a temporary image error without replacing the image or automatically generating', async () => {
+  setup({input: {...context, references: [{...references[0], preview_url: null}, references[1]]}})
+  const original = vi.mocked(api).getMockImplementation()!
+  let attempts = 0
+  vi.mocked(api).mockImplementation(async (path, method, body) => {
+    if (path.includes('generation-source')) {
+      if (++attempts === 1) throw new ApiError(500, 'Server error')
+      return {image}
+    }
+    return original(path, method, body)
+  })
+  const navigate = vi.fn()
+  render(<ProjectGenerationPage projectId="p" navigate={navigate} />)
+  await prepare()
+  fireEvent.click(screen.getByRole('button', {name: '프로젝트 시안 1장 만들기'}))
+  fireEvent.click(await screen.findByRole('button', {name: '이미지 다시 준비'}))
+  await screen.findByText('이미지가 준비됐습니다. 시안 만들기를 누르면 이어서 진행합니다.')
+  expect(screen.queryByLabelText('레이아웃 이미지 교체')).not.toBeInTheDocument()
+  expect(api).not.toHaveBeenCalledWith('/projects/p/generations', 'POST', expect.anything())
+  fireEvent.click(screen.getByRole('button', {name: '프로젝트 시안 1장 만들기'}))
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith('/generations/job'))
+  expect(attempts).toBe(2)
 })
 
 it('shows saved previews immediately without selecting or submitting AI inputs', async () => {

@@ -1,10 +1,8 @@
-"""Build deterministic collector assets without third-party packages or credentials."""
+"""Build deterministic collector packages and shared brand icons using Pillow."""
 
 import io
-import struct
 import sys
 import zipfile
-import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +14,10 @@ FILES = [
     "options.html",
     "options.css",
     "options.js",
+    "icons/icon-16.png",
+    "icons/icon-32.png",
+    "icons/icon-48.png",
+    "icons/icon-128.png",
 ]
 
 
@@ -30,37 +32,11 @@ def extension_zip():
     return output.getvalue()
 
 
-def icon(size):
-    def chunk(kind, data):
-        return (
-            struct.pack(">I", len(data))
-            + kind
-            + data
-            + struct.pack(">I", zlib.crc32(kind + data))
-        )
-
-    pixels = bytearray()
-    for y in range(size):
-        pixels.append(0)
-        for x in range(size):
-            u, v = x / size, y / size
-            stem = 0.28 <= u <= 0.39 and 0.22 <= v <= 0.78
-            bowl = (
-                ((u - 0.48) / 0.22) ** 2 + ((v - 0.405) / 0.185) ** 2 <= 1
-                and not (((u - 0.48) / 0.11) ** 2 + ((v - 0.405) / 0.085) ** 2 < 1)
-                and u >= 0.35
-            )
-            leg = (
-                0.52 <= v <= 0.78
-                and 0.46 + (v - 0.52) * 0.65 <= u <= 0.58 + (v - 0.52) * 0.65
-            )
-            pixels.extend((255, 255, 255) if stem or bowl or leg else (54, 92, 67))
-    return (
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
-        + chunk(b"IDAT", zlib.compress(bytes(pixels), 9))
-        + chunk(b"IEND", b"")
-    )
+def icon(size, *, maskable=False):
+    from generate_brand_icons import render
+    output = io.BytesIO()
+    render(size, maskable=maskable).save(output, format='PNG')
+    return output.getvalue()
 
 
 def main():
@@ -68,6 +44,7 @@ def main():
         "reference-maker-extension.zip": extension_zip(),
         "icon-192.png": icon(192),
         "icon-512.png": icon(512),
+        "icon-maskable-512.png": icon(512, maskable=True),
     }
     if "--check" in sys.argv:
         if any(

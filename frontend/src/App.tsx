@@ -8,6 +8,7 @@ import { GenerationPage } from './GenerationPage'
 import { LegacyGenerationRedirect, ProjectGenerationPage } from './ProjectGenerationPage'
 import { acceptIncomingShare, pendingShare, pendingShareRoute, clearPendingShare } from './lib/share'
 import './App.css'
+import './theme.css'
 
 let dirty = false
 function SavedReferenceThumbnail({item, readOnly}: {item: Reference; readOnly: boolean}) {
@@ -174,7 +175,7 @@ function LibraryPage({projectId, typeId, search}: {projectId?: string; typeId?: 
     try {await api(path(item), 'PATCH', {archived: !item.archived_at}); reload()} catch (error) {setActionError(errorMessage(error))} finally {setBusy(false)}
   }
   return <section className={`library-workspace${projectId ? ' project-library' : ''}`}>
-    {projectId ? <ProjectHeader projectId={projectId} name={data.parent?.name || title} active="references" count={data.page.total} navigate={go}>
+    {projectId ? <ProjectHeader projectId={projectId} typeId={typeId} name={data.parent?.name || title} active="references" count={data.page.total} navigate={go}>
       {!readOnly && <Link className="button project-add" to={`/references/new?project=${projectId}${typeId || data.kinds.length === 1 ? `&type=${typeId || data.kinds[0].id}` : ''}`}>＋ 레퍼런스 추가</Link>}
     </ProjectHeader> : <><nav className="breadcrumbs" aria-label="현재 위치"><Link to="/projects">프로젝트</Link></nav><Heading title={title}>
       {!readOnly && (projectId ? <Link className="button" to={`/references/new?project=${projectId}${typeId || data.kinds.length === 1 ? `&type=${typeId || data.kinds[0].id}` : ''}`}>＋ 레퍼런스 추가</Link> : <button onClick={() => setDialog({title: '프로젝트 만들기'})}>＋ 프로젝트 만들기</button>)}
@@ -200,7 +201,7 @@ function LibraryPage({projectId, typeId, search}: {projectId?: string; typeId?: 
         <button className="text-button classification-add" onClick={() => {if (manager.current) manager.current.open = false; setDialog({title: '산출물 유형 추가'})}}>＋ 분류 추가</button>
       </section></details>}
       <label className="reference-status-filter">표시<select aria-label="레퍼런스 표시 상태" value={archived || !!data.kind?.archived_at ? 'archived' : 'active'} onChange={event => go(`/projects/${projectId}${event.target.value === 'archived' ? '?archived=true' : ''}`)}><option value="active">진행 중</option><option value="archived">보관함</option></select></label>
-      {typeId && !readOnly && <Link className="button secondary classification-generate" to={`/projects/${projectId}/generate?type=${typeId}`}>이 분류로 AI 시안 만들기</Link>}
+      {!readOnly && <Link className="button classification-generate" title="참고 이미지와 요구사항을 확인한 뒤 생성합니다" to={`/projects/${projectId}/generate${typeId ? `?type=${typeId}` : ''}`}>{typeId ? `${data.kind?.name || '이 분류'}로 시안 만들기 →` : '프로젝트 시안 만들기 →'}</Link>}
     </div></div>}
     {!projectId && <div className="list-caption"><span>프로젝트 {data.page.total}개</span><span>최근 수정순</span></div>}
     {actionError && <p className="error" role="alert">{actionError}</p>}
@@ -215,9 +216,15 @@ function LibraryPage({projectId, typeId, search}: {projectId?: string; typeId?: 
         </div>
         <h2><Link to={`/references/${item.id}?return=${encodeURIComponent(base + search)}`}>{item.title || host(item.source_url)}</Link></h2><p className="card-note">{item.design_note || '메모 없음'}</p>
         <div className="card-bottom"><span>{date(item.created_at)}</span><a href={item.source_url} target="_blank" rel="noopener noreferrer">원본 열기 ↗</a></div></article>
-      return <article className="project-card" key={item.id}>{item.thumbnail_url ? <Link className="card-preview" to={projectId ? `/projects/${projectId}/types/${item.id}` : `/projects/${item.id}`}><Thumbnail url={item.thumbnail_url} label={item.name} /></Link> : <span className="folder-mark" aria-hidden="true">▱</span>}<h2><Link to={projectId ? `/projects/${projectId}/types/${item.id}` : `/projects/${item.id}`}>{item.name}</Link></h2>
-        <p>{date(item.updated_at)} 수정</p>
-        {!item.archived_at && !readOnly && <Link className="button secondary card-add" to={projectId ? `/references/new?project=${projectId}&type=${item.id}` : `/references/new?project=${item.id}`}>＋ 레퍼런스 추가</Link>}
+      return <article className="project-card" key={item.id}><Link className="card-preview" to={projectId ? `/projects/${projectId}/types/${item.id}` : `/projects/${item.id}`}>
+        {item.thumbnail_url ? <Thumbnail url={item.thumbnail_url} label={item.name} /> : <div className="project-empty-cover">
+          <div className="project-empty-art" aria-hidden="true"><span /><span /><span><svg viewBox="0 0 32 28" fill="none"><rect x="1" y="1" width="30" height="26" rx="3" stroke="currentColor" strokeWidth="1.5"/><circle cx="10" cy="9" r="2.5" fill="currentColor"/><path d="m4 23 8-8 5 5 5-7 6 10" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg></span></div>
+          <strong>{item.reference_count === 0 ? '아직 레퍼런스가 없어요' : '대표 이미지를 기다리고 있어요'}</strong>
+          <span>{item.reference_count === 0 ? '첫 링크를 추가해 프로젝트를 채워보세요.' : '저장된 레퍼런스의 미리보기가 표시됩니다.'}</span>
+        </div>}
+      </Link><h2><Link to={projectId ? `/projects/${projectId}/types/${item.id}` : `/projects/${item.id}`}>{item.name}</Link></h2>
+        <p>{item.reference_count !== undefined && <>레퍼런스 {item.reference_count}개 · </>}{date(item.updated_at)} 수정</p>
+        {!item.archived_at && !readOnly && <Link className="button secondary card-add" to={projectId ? `/references/new?project=${projectId}&type=${item.id}` : `/references/new?project=${item.id}`}>{item.reference_count === 0 ? '＋ 첫 레퍼런스 추가' : '＋ 레퍼런스 추가'}</Link>}
         <div className="card-bottom"><Link to={projectId ? `/projects/${projectId}/types/${item.id}` : `/projects/${item.id}`}>{projectId ? '레퍼런스 보기' : '프로젝트 열기'} →</Link><details><summary aria-label={`${item.name} 관리`}>관리</summary><div className="menu">
           {!item.archived_at && !readOnly && <button className="text-button" onClick={() => setDialog({item, title: '이름 변경'})}>이름 변경</button>}
           {!readOnly && <button className="text-button" disabled={busy} onClick={() => archive(item)}>{item.archived_at ? '보관 해제' : '보관'}</button>}

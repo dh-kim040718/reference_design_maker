@@ -1,9 +1,21 @@
 :root {
+  --color-canvas: #ffffff;
+  --color-surface: #ffffff;
+  --color-subtle: #f7f7f8;
+  --color-hover: #f0f1f3;
+  --color-border: #e7e7e9;
+  --color-border-strong: #cdced3;
+  --color-text: #252528;
+  --color-muted: #73747c;
+  --color-accent: #252528;
+  --color-accent-hover: #080809;
+  --color-accent-soft: #efeff0;
+  --color-focus: #8d8d93;
   font-family:
     Inter, Pretendard, "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
-  color: #242b26;
-  background: #f7f7f2;
+  color: var(--color-text);
+  background: var(--color-canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

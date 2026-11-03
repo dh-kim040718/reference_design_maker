@@ -98,6 +98,8 @@ try {
   }
   await click('＋ 프로젝트 만들기')
   await fill('dialog input', projectName); await click('저장')
+  await until(`[...document.querySelectorAll('.project-card')].some(card=>card.innerText.includes(${JSON.stringify(projectName)})&&card.innerText.includes('아직 레퍼런스가 없어요'))`)
+  await screenshot('project-cards')
   await click(projectName)
   await click('분류 관리'); await click('＋ 분류 추가'); await fill('dialog input', '웹사이트'); await click('저장')
   await click('웹사이트'); await click('＋ 레퍼런스 추가')
@@ -146,7 +148,8 @@ try {
     }
     await click('레퍼런스 저장')
     await until("document.body.innerText.includes('레퍼런스를 저장했습니다.')")
-    await click('AI 시안')
+    await click('전체')
+    await click('프로젝트 시안 만들기 →')
     await until("document.body.innerText.includes('검토할 전체 레퍼런스 · 2개')")
     if (!await evaluate("document.body.innerText.includes('큰 제목과 여백을 참고합니다.') && document.body.innerText.includes('차트 막대 표현을 참고합니다.')")) throw new Error('Cross-classification notes missing')
     await fill('textarea[maxlength="5000"]', '데스크톱 대시보드: 전체 배치와 차트를 종합해 주세요.')

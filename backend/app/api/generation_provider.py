@@ -68,7 +68,7 @@ def decode_image(value: str) -> bytes:
             with Image.open(io.BytesIO(raw)) as image:
                 if image.format not in {"PNG", "JPEG", "WEBP"}:
                     raise ValueError
-                if image.width * image.height > 16_000_000 or image.is_animated:
+                if image.width * image.height > 16_000_000 or getattr(image, "is_animated", False):
                     raise ValueError
                 image.verify()
         return raw

@@ -6,7 +6,8 @@ import { appOrigin, captureUrl } from './capture.js'
 test('installed app and extension target the same safe confirmation endpoint', () => {
   const manifest = JSON.parse(readFileSync(new URL('../frontend/public/manifest.webmanifest', import.meta.url), 'utf8'))
   assert.deepEqual(manifest.share_target, {action: '/share', method: 'GET', enctype: 'application/x-www-form-urlencoded', params: {title: 'title', text: 'text', url: 'url'}})
-  assert.deepEqual(manifest.icons.map(item => item.sizes), ['192x192', '512x512'])
+  assert.deepEqual(manifest.icons.filter(item => item.purpose === 'any').map(item => item.sizes), ['192x192', '512x512'])
+  assert.ok(manifest.icons.some(item => item.purpose === 'maskable' && item.sizes === '512x512'))
 })
 
 test('captures the exact page URL including queries and fragments', () => {

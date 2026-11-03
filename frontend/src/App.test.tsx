@@ -42,6 +42,15 @@ beforeEach(() => {
 afterEach(() => {cleanup(); vi.resetAllMocks()})
 
 describe('Phase 2 library', () => {
+  it('gives empty projects a full cover, an honest empty message and a first action', async () => {
+    authorized()
+    const original = vi.mocked(api).getMockImplementation()!
+    vi.mocked(api).mockImplementation(async (path, method, body) => path.startsWith('/projects?') ? page([{...project, reference_count: 0}]) : original(path, method, body))
+    render(<App />)
+    expect(await screen.findByText('아직 레퍼런스가 없어요')).toBeInTheDocument()
+    expect(screen.getByRole('link', {name: '＋ 첫 레퍼런스 추가'})).toHaveAttribute('href', '/references/new?project=project')
+    expect(document.querySelector('.folder-mark')).toBeNull()
+  })
   it('keeps classification navigation separate from management actions', async () => {
     authorized()
     history.replaceState(null, '', '/projects/project')

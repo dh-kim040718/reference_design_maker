@@ -150,7 +150,9 @@ def list_projects(
         query.order_by(Project.updated_at.desc(), Project.id.desc()),
         limit,
         offset,
-        lambda item: serialize(item, thumbnail_url=cover(db, project_id=item.id)),
+        lambda item: serialize(item, thumbnail_url=cover(db, project_id=item.id),
+                               reference_count=db.scalar(select(func.count()).select_from(Reference)
+                                   .join(DeliverableType).where(DeliverableType.project_id == item.id))),
     )
 
 
@@ -329,7 +331,7 @@ def generation_source(item_id: UUID, db: DB, user: User, response: Response,
     import io
     import json
     import time
-    from PIL import Image
+    from PIL import Image, UnidentifiedImageError
     from app.api.preview import fetch, PreviewUnavailable
     from app.api.generation_provider import decode_image, ProviderFailure
 
@@ -347,6 +349,8 @@ def generation_source(item_id: UUID, db: DB, user: User, response: Response,
             image = saved
         else:
             status, raw, _, _ = fetch(saved, time.monotonic() + 10, limit=8 * 1024 * 1024)
+            if status == 429 or status >= 500:
+                fail(503, "IMAGE_DOWNLOAD_FAILED", "원본 이미지 서버가 일시적으로 응답하지 않습니다. 다시 준비해 주세요.")
             if status != 200:
                 raise ValueError("Unavailable image")
             with Image.open(io.BytesIO(raw)) as picture:
@@ -355,8 +359,13 @@ def generation_source(item_id: UUID, db: DB, user: User, response: Response,
                 raise ValueError("Unsupported image")
             image = f"data:{mime};base64," + base64.b64encode(raw).decode()
         decode_image(image)
-    except (PreviewUnavailable, ProviderFailure, ValueError, OSError, TimeoutError,
-            http.client.HTTPException, Image.DecompressionBombError):
+    except (TimeoutError, ConnectionError, http.client.HTTPException):
+        fail(503, "IMAGE_DOWNLOAD_FAILED", "원본 이미지 연결이 지연됐습니다. 다시 준비해 주세요.")
+    except OSError as error:
+        if not isinstance(error, UnidentifiedImageError):
+            fail(503, "IMAGE_DOWNLOAD_FAILED", "원본 이미지에 연결하지 못했습니다. 다시 준비해 주세요.")
+        fail(422, "IMAGE_UNAVAILABLE", "이미지 파일을 읽을 수 없습니다. 다른 이미지로 교체해 주세요.")
+    except (PreviewUnavailable, ProviderFailure, ValueError, Image.DecompressionBombError):
         fail(422, "IMAGE_UNAVAILABLE", "이 이미지를 사용할 수 없습니다. PNG·JPEG·WebP 이미지로 교체해 주세요.")
     return {"image": image}
 
