@@ -100,6 +100,20 @@ describe('Phase 2 library', () => {
     expect(screen.getByRole('textbox', {name: /제목/})).toHaveValue('After login')
   })
 
+  it('prefills and saves the extension thumbnail without another metadata lookup', async () => {
+    authorized()
+    const original = vi.mocked(api).getMockImplementation()!
+    vi.mocked(api).mockImplementation(async (path, method, body) => path === '/references' && method === 'POST' ? reference : original(path, method, body))
+    history.replaceState(null, '', '/share?' + new URLSearchParams({url: reference.source_url, title: 'Shared image'}) + '#' + new URLSearchParams({preview: 'https://i.pinimg.com/cover.jpg'}))
+    render(<App />)
+    await screen.findByRole('textbox', {name: /URL/})
+    expect(document.querySelector('.capture-preview img')).toHaveAttribute('src', 'https://i.pinimg.com/cover.jpg')
+    await waitFor(() => expect(screen.getByRole('combobox', {name: /산출물 유형/})).toHaveValue('type'))
+    fireEvent.submit(screen.getByRole('button', {name: '레퍼런스 저장'}).closest('form')!)
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/references', 'POST', expect.objectContaining({preview_url: 'https://i.pinimg.com/cover.jpg', preview_source: 'page_metadata'})))
+    expect(api).not.toHaveBeenCalledWith('/references/preview', 'POST', expect.anything())
+  })
+
   it('falls back to manual URL entry when shared information has no valid link', async () => {
     authorized(); history.replaceState(null, '', '/share?title=Only%20a%20title&url=javascript%3Aalert(1)')
     render(<App />)

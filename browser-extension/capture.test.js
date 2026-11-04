@@ -28,3 +28,16 @@ test('rejects unsafe or ambiguous app destinations', () => {
   }
   assert.equal(appOrigin('https://app.example.com/'), 'https://app.example.com')
 })
+
+test('passes a bounded HTTPS preview in the fragment while preserving the source URL', () => {
+  const source = 'https://example.com/design?view=a#hero'
+  const target = new URL(captureUrl('https://app.example.com', {url: source, title: 'Title'}, 'https://i.pinimg.com/736x/cover.jpg'))
+  assert.equal(target.searchParams.get('url'), source)
+  assert.equal(target.searchParams.has('preview'), false)
+  assert.equal(new URLSearchParams(target.hash.slice(1)).get('preview'), 'https://i.pinimg.com/736x/cover.jpg')
+  for (const preview of ['javascript:alert(1)', 'data:image/png;base64,x', 'http://example.com/x.png', 'https://u:p@example.com/x.png']) {
+    assert.equal(new URL(captureUrl('https://app.example.com', {url: source}, preview)).hash, '')
+  }
+  const long = new URL(captureUrl('https://app.example.com', {url: 'https://example.com/' + '가'.repeat(1000)}, 'https://example.com/' + '가'.repeat(1000)))
+  assert.ok(long.href.length <= 7500)
+})

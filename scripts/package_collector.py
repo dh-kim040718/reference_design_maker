@@ -10,6 +10,8 @@ PUBLIC = ROOT / "frontend" / "public"
 FILES = [
     "manifest.json",
     "capture.js",
+    "page-preview.js",
+    "thumbnail.js",
     "worker.js",
     "options.html",
     "options.css",

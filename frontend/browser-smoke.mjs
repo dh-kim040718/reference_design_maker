@@ -63,8 +63,12 @@ try {
     if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails.text)
     if (message.method === 'Page.javascriptDialogOpening') command('Page.handleJavaScriptDialog', {accept: true}).catch(() => {})
     if (message.method === 'Fetch.requestPaused' && message.params.request.url.startsWith('https://share-source.example.test/')) {
-      const body = Buffer.from('<!doctype html><html><head><title>브라우저 공유 테스트</title></head><body><h1>External reference fixture</h1></body></html>').toString('base64')
-      command('Fetch.fulfillRequest', {requestId: message.params.requestId, responseCode: 200, responseHeaders: [{name: 'Content-Type', value: 'text/html; charset=utf-8'}], body}).catch(() => {})
+      if (message.params.request.url.endsWith('/cover.png')) {
+        readFile(path.join(folder, 'thumbnail-upload.png')).then(bytes => command('Fetch.fulfillRequest', {requestId: message.params.requestId, responseCode: 200, responseHeaders: [{name:'Content-Type',value:'image/png'}], body:bytes.toString('base64')})).catch(() => {})
+      } else {
+        const body = Buffer.from('<!doctype html><html><head><title>브라우저 공유 테스트</title><meta property="og:image" content="https://share-source.example.test/cover.png"></head><body><h1>External reference fixture</h1></body></html>').toString('base64')
+        command('Fetch.fulfillRequest', {requestId: message.params.requestId, responseCode: 200, responseHeaders: [{name: 'Content-Type', value: 'text/html; charset=utf-8'}], body}).catch(() => {})
+      }
     }
   }
   await command('Runtime.enable'); await command('Page.enable')
@@ -205,6 +209,27 @@ try {
     if (await evaluate('document.documentElement.scrollWidth>innerWidth')) throw new Error('Project generation mobile overflow')
     await command('Page.navigate', {url:detailUrl})
     await until("!!document.querySelector('.inspector')")
+  }
+  if (process.argv.includes('--extension-preview')) {
+    const {readPagePreview, makePageThumbnail} = await import('../browser-extension/page-preview.js')
+    const {captureUrl} = await import('../browser-extension/capture.js')
+    await command('Fetch.enable', {patterns:[{urlPattern:'https://share-source.example.test/*',requestStage:'Request'}]})
+    await command('Page.navigate', {url:'https://share-source.example.test/reference?view=full#hero'})
+    await until("document.title==='브라우저 공유 테스트'")
+    const page = await evaluate(`(${readPagePreview.toString()})()`)
+    if (page.preview !== 'https://share-source.example.test/cover.png') throw new Error('Page preview extraction failed')
+    const inline = await evaluate(`(${makePageThumbnail.toString()})(${JSON.stringify(page.preview)})`)
+    if (!inline.startsWith('data:image/jpeg;base64,/9j/')) throw new Error('Automatic thumbnail conversion failed')
+    await command('Page.navigate', {url:captureUrl(new URL(url).origin,page,inline)})
+    await until("!!document.querySelector('.capture-preview img')?.naturalWidth")
+    await until("!!document.querySelector('select[name=deliverable_type_id]')?.value")
+    await screenshot('extension-auto-preview')
+    if (await evaluate("location.hash!=='' || document.querySelector('input[name=source_url]').value!=='https://share-source.example.test/reference?view=full#hero'")) throw new Error('Incorrect extension intake')
+    await click('레퍼런스 저장')
+    await until("document.body.innerText.includes('레퍼런스를 저장했습니다.')")
+    await click('브라우저 공유 테스트')
+    await until("!!document.querySelector('.inspector-image img')?.naturalWidth")
+    await screenshot('extension-preview-saved')
   }
   if (process.argv.includes('--share')) {
     await click('외부에서 저장')

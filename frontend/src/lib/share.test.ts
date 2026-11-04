@@ -3,6 +3,23 @@ import {acceptIncomingShare, bookmarklet, clearPendingShare, normalizeShare, pen
 
 afterEach(() => {clearPendingShare(); history.replaceState(null, '', '/'); vi.useRealTimers()})
 describe('shared reference intake', () => {
+  it('keeps the extension preview through intake and clears it from the visible address', () => {
+    history.replaceState(null, '', '/share?url=https%3A%2F%2Fexample.com#preview=https%3A%2F%2Fi.pinimg.com%2Fcover.jpg')
+    const route = acceptIncomingShare()
+    expect(route).not.toContain('pinimg')
+    expect(location.hash).toBe('')
+    expect(pendingShare()?.previewUrl).toBe('https://i.pinimg.com/cover.jpg')
+    expect(normalizeShare(new URLSearchParams({url: 'https://example.com', preview: 'javascript:alert(1)'})).previewUrl).toBeUndefined()
+  })
+  it('accepts a small generated JPEG thumbnail and preserves the collector version', () => {
+    const jpeg = 'data:image/jpeg;base64,/9j/AA=='
+    history.replaceState(null, '', '/share?' + new URLSearchParams({url:'https://example.com',collector:'extension-0.3.0'}) + '#' + new URLSearchParams({preview:jpeg}))
+    acceptIncomingShare()
+    expect(pendingShare()?.previewUrl).toBe(jpeg)
+    expect(pendingShare()?.collectorVersion).toBe('0.3.0')
+    expect(location.hash).toBe('')
+    expect(normalizeShare(new URLSearchParams({url:'https://example.com',preview:'data:image/svg+xml,<svg/>'})).previewUrl).toBeUndefined()
+  })
   it('preserves a URL query and fragment without decoding it twice', () => {
     const url = 'https://example.com/design?a=1&next=%2Fpath#hero'
     expect(normalizeShare(new URLSearchParams({url})).url).toBe(url)

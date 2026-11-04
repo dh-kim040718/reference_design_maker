@@ -3,9 +3,17 @@ export interface SharedReference {
   title: string
   note: string
   warning: string
+  previewUrl?: string
+  collectorVersion?: string
 }
 const pendingKey = 'reference-maker-pending-share'
 const expiryMs = 15 * 60 * 1000
+
+function previewUrl(value: string): string | undefined {
+  if (value.length <= 160000 && /^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/]*={0,2}$/.test(value)) return value
+  const safe = webUrl(value)
+  return safe && new URL(safe).protocol === 'https:' ? new URL(safe).href : undefined
+}
 
 export function webUrl(input: string): string | null {
   const value = input.trim()
@@ -28,6 +36,8 @@ export function normalizeShare(params: URLSearchParams): SharedReference {
   const note = text.replace(url, '').trim()
   return {
     url, title, note: note === title ? '' : note.slice(0, 5000),
+    ...(url && previewUrl(params.get('preview') || '') ? {previewUrl: previewUrl(params.get('preview') || '')} : {}),
+    ...(/^extension-\d+\.\d+\.\d+$/.test(params.get('collector') || '') ? {collectorVersion: params.get('collector')!.slice(10)} : {}),
     warning: !url ? '공유된 내용에 사용할 수 있는 링크가 없어요. URL을 직접 입력해 주세요.'
       : urls.length > 1 ? '여러 링크 중 첫 번째를 선택했어요. 저장할 URL을 확인해 주세요.' : '',
   }
@@ -35,7 +45,11 @@ export function normalizeShare(params: URLSearchParams): SharedReference {
 
 export function acceptIncomingShare(): string {
   if (window.location.pathname === '/share') {
-    const payload = normalizeShare(new URLSearchParams(window.location.search))
+    const params = new URLSearchParams(window.location.search)
+    params.delete('preview')
+    const image = new URLSearchParams(window.location.hash.slice(1)).get('preview')
+    if (image) params.set('preview', image)
+    const payload = normalizeShare(params)
     const id = crypto.randomUUID()
     sessionStorage.setItem(pendingKey, JSON.stringify({payload, id, createdAt: Date.now()}))
     // Remove the external URL/text from the visible address and browser history entry.
@@ -52,7 +66,7 @@ export function pendingShare(id?: string): SharedReference | null {
     const payload = value.payload
     if (id && value.id !== id) return null
     if (![payload.url, payload.title, payload.note, payload.warning].every(item => typeof item === 'string')) return null
-    return {url: webUrl(payload.url) ?? '', title: payload.title.slice(0, 200), note: payload.note.slice(0, 5000), warning: payload.warning.slice(0, 300)}
+    return {url: webUrl(payload.url) ?? '', title: payload.title.slice(0, 200), note: payload.note.slice(0, 5000), warning: payload.warning.slice(0, 300), ...(typeof payload.previewUrl === 'string' && previewUrl(payload.previewUrl) ? {previewUrl: previewUrl(payload.previewUrl)} : {}), ...(typeof payload.collectorVersion === 'string' && /^\d+\.\d+\.\d+$/.test(payload.collectorVersion) ? {collectorVersion: payload.collectorVersion} : {})}
   } catch {clearPendingShare(); return null}
 }
 export function clearPendingShare() { sessionStorage.removeItem(pendingKey) }

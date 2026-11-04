@@ -254,7 +254,7 @@ function CreatePage({search}: {search: string}) {
     const id = new URLSearchParams(search).get('shared')
     return id ? pendingShare(id) : null
   })
-  const [form, setForm] = useState(() => ({projectId: '', typeId: '', url: shared?.url ?? '', title: shared?.title ?? '', note: shared?.note ?? '', previewUrl: '', previewSource: '', ...readDraft(draftRoute)}))
+  const [form, setForm] = useState(() => ({projectId: '', typeId: '', url: shared?.url ?? '', title: shared?.title ?? '', note: shared?.note ?? '', previewUrl: shared?.previewUrl || '', previewSource: shared?.previewUrl ? shared.previewUrl.startsWith('data:') ? 'user_upload' : 'page_metadata' : '', ...readDraft(draftRoute)}))
   const {projectId, typeId, url, title, note, previewUrl, previewSource} = form
   const change = (field: keyof typeof form, value: string) => setForm(previous => ({...previous, [field]: value}))
   const setProjectId = (value: string) => change('projectId', value)
@@ -280,6 +280,7 @@ function CreatePage({search}: {search: string}) {
     let active = true
     let parsed: URL
     try {parsed = new URL(url); if (!['https:', 'http:'].includes(parsed.protocol)) return} catch {return}
+    if (previewUrl || previewSource === 'user_upload') return
     const timer = setTimeout(() => {
       setPreviewState('loading')
       api<Preview>('/references/preview', 'POST', {source_url: url}).then(result => {
@@ -287,11 +288,11 @@ function CreatePage({search}: {search: string}) {
         setPreviewState(result.status)
         setPreviewWarning(result.status === 'unavailable' ? previewFailureMessage(result) : '')
         setForm(previous => ({...previous, title: manualTitle.current ? previous.title : result.title || previous.title,
-          ...(previous.previewSource === 'user_upload' ? {} : {previewUrl: result.preview_url || '', previewSource: result.preview_url ? 'page_metadata' : ''})}))
+          ...(previous.previewUrl || previous.previewSource === 'user_upload' ? {} : {previewUrl: result.preview_url || '', previewSource: result.preview_url ? 'page_metadata' : ''})}))
       }).catch(() => {if (active) {setPreviewState('unavailable'); setPreviewWarning('미리보기를 확인하지 못했어요. 링크는 그대로 저장할 수 있습니다.')}})
     }, 700)
     return () => {active = false; clearTimeout(timer)}
-  }, [url])
+  }, [url, previewUrl, previewSource])
   const initial = useLoad(async () => {
     const [projects, preference] = await Promise.all([allItems<Project>('/projects'), api<{last_path: Path | null}>('/preferences')])
     return {projects, preference}
@@ -316,7 +317,7 @@ function CreatePage({search}: {search: string}) {
   if (initial.error) return <ErrorState message={initial.error} retry={initial.reload} />
   if (!initial.data) return <Loading />
   return <div className="form-page compact-workspace"><div className="workspace-heading"><div><p className="eyebrow">NEW REFERENCE</p><h1>레퍼런스 추가</h1></div><Link className="close-panel" to={back}>닫기 ×</Link></div>
-    {shared && <p className={shared.warning ? 'notice' : 'share-received'} role="status">{shared.warning || '외부에서 가져온 레퍼런스입니다. URL과 저장 위치를 확인한 뒤 저장하세요.'}</p>}
+    {shared && <p className={shared.warning ? 'notice' : 'share-received'} role="status">{shared.warning || (shared.collectorVersion ? `확장 프로그램 ${shared.collectorVersion} · ${shared.previewUrl ? '썸네일을 자동으로 가져왔습니다. 저장 위치를 확인해 주세요.' : '썸네일을 전달받지 못했습니다. 원본 페이지에서 이미지가 보이는 상태로 확장 아이콘을 다시 눌러주세요.'}` : '외부에서 가져온 레퍼런스입니다. URL과 저장 위치를 확인한 뒤 저장하세요.')}</p>}
     {!shared && new URLSearchParams(search).has('shared') && <p className="notice" role="status">공유 정보가 만료되었어요. URL을 다시 입력해 주세요.</p>}
     <div className="capture-layout"><div className="capture-fields">
     <form className="editor" ref={formRef} onSubmit={async event => {
