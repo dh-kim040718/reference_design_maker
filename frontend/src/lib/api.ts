@@ -18,12 +18,15 @@ export interface Project {
 export interface DeliverableType extends Project {
   project_id: string; project_name: string; read_only: boolean
 }
+export interface RegionNote {x: number; y: number; width: number; height: number; note: string}
+export interface DesignGuidance {roles: string[]; regions: RegionNote[]; image_version?: string | null}
 export interface Reference {
   id: string; source_url: string; title: string | null; description: string | null
   design_note: string | null; project_id: string; project_name: string
   deliverable_type_id: string; deliverable_type_name: string; read_only: boolean
   created_at: string; updated_at: string
   preview_url?: string | null; preview_source?: string | null
+  design_guidance?: DesignGuidance; guidance_stale?: boolean; preview_version?: string
 }
 export interface Preview { preview_url: string | null; title: string | null; status: 'available' | 'unavailable'; reason?: string }
 export function previewFailureMessage(preview: Preview) {

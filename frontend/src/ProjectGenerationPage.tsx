@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, ApiError, errorMessage, type Reference } from './lib/api'
+import { api, ApiError, errorMessage, type Reference, type DesignGuidance } from './lib/api'
+import { GuidanceSummary } from './ReferenceGuidance'
 import { GenerationMetrics } from './GenerationMetrics'
 import { ProjectHeader } from './ProjectHeader'
 
 interface InputReference {
   id: string; title: string; source_url: string; design_note: string; type_name: string
   archived_type: boolean; preview_url: string | null; thumbnail_url?: string | null; preview_version?: string
+  design_guidance?: DesignGuidance; guidance_stale?: boolean
 }
 interface Context {
   type_id?: string; type_name?: string
@@ -90,6 +92,7 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
   function changed() {request.current = crypto.randomUUID(); setError(''); setNotice('')}
   const locked = busy || ambiguous || !!context?.read_only
   const selectedReferences = context?.references.filter(row => !excludedIds.includes(row.id)) || []
+  const staleGuidance = selectedReferences.some(row => row.guidance_stale)
   const totalBytes = selectedReferences.reduce((sum, row) => sum + sourceBytes(sources[row.id] || ''), 0)
   const tooLarge = totalBytes > 16 * 1024 * 1024
   const promptTooLong = !!context && context.prompt_characters - context.brief.length + brief.length + instruction.length > 32000
@@ -156,6 +159,9 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
           {!context.type_id && <span className="concept-reference-type">{row.type_name}{row.archived_type ? ' · 보관됨' : ''}</span>}
         </div></div>
         <p className="concept-note" title={row.design_note || '메모 없음'}>{row.design_note || '메모 없음'}</p>
+        <GuidanceSummary value={row.design_guidance} />
+        {row.design_guidance && row.design_guidance.regions.length > 0 && <details className="guidance-region-details"><summary>영역별 메모 확인</summary>{row.design_guidance.regions.map((region, i) => <p key={i}>영역 {i + 1} · {region.note}</p>)}</details>}
+        {row.guidance_stale && <p className="error">이미지가 변경됐습니다. 제목을 눌러 참고 영역을 다시 확인해 주세요.</p>}
         {!excludedIds.includes(row.id) && imageErrors[row.id] && <div className="concept-image-recovery"><p role="alert">{imageErrors[row.id].message}</p>
           {imageErrors[row.id].retryable ? <button type="button" className="secondary" disabled={locked} onClick={() => void retryImage(row)}>이미지 다시 준비</button>
             : !imageErrors[row.id].stale && <label className="concept-upload">이미지 교체<input aria-label={`${row.title} 이미지 교체`} type="file" accept="image/png,image/jpeg,image/webp" disabled={locked} onChange={event => void selectFile(row.id, event.target.files?.[0])} /></label>}
@@ -165,7 +171,7 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
     </section>
     <form className="concept-submit" onSubmit={async event => {
       event.preventDefault()
-      if (busy || activeJob || !policy.enabled || !selectedReferences.length || tooLarge || promptTooLong || !rights || !brief.trim() || context.blocked_reason || context.read_only) return
+      if (staleGuidance || busy || activeJob || !policy.enabled || !selectedReferences.length || tooLarge || promptTooLong || !rights || !brief.trim() || context.blocked_reason || context.read_only) return
       setBusy(true); setError('')
       let submitted = false
       try {
@@ -205,11 +211,12 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
       {(context.blocked_reason === 'prompt_limit' || promptTooLong) && <p className="notice">전체 요구사항·메모·추가 요청의 길이가 입력 한도를 초과했습니다. 일부 메모를 조용히 생략하지 않습니다.</p>}
       {tooLarge && <p className="notice">전체 이미지 합계가 16MB를 초과했습니다. 더 작은 이미지를 선택해 주세요.</p>}
       {!selectedReferences.length && <p className="hint" role="status">참고할 레퍼런스를 한 개 이상 선택해 주세요.</p>}
+      {staleGuidance && <p className="error" role="status">선택한 이미지의 참고 영역을 재확인한 뒤 프로젝트 입력을 새로고침해 주세요.</p>}
       <label className="rights-check"><input type="checkbox" checked={rights} disabled={locked} onChange={event => setRights(event.target.checked)} /><span>프로젝트의 모든 입력 이미지를 AI 생성에 사용할 권한을 확인했습니다.</span></label>
       {!policy.enabled && <p className="hint" role="status">{policy.reason === 'budget_exhausted'
         ? '앱의 API 예산 제한으로 생성이 잠겨 있습니다. 체크 여부와 관계없이 새 요청을 보낼 수 없습니다. 실제 청구액과 앱의 예약 예산은 다를 수 있으며, 사용 내역 확인 후 서버 예산 설정을 조정해야 합니다.'
         : `${policyLabels[policy.reason || ''] || 'AI 사용 제한'} 상태여서 생성할 수 없습니다. 서버의 AI 사용 설정을 확인해 주세요.`}</p>}
-      {activeJob ? <button type="button" onClick={() => navigate(`/generations/${activeJob.id}`)}>진행 중인 요청 확인</button> : <button disabled={busy || !selectedReferences.length || !policy.enabled || !policy.remaining || tooLarge || promptTooLong || !rights || !brief.trim() ||  !!context.blocked_reason || context.read_only}>{busy ? (preparing ? '이미지 준비 중…' : '요청 중…') : ambiguous ? '같은 프로젝트 요청 상태 확인' : context.type_name ? '이 분류 시안 1장 만들기' : '프로젝트 시안 1장 만들기'}</button>}
+      {activeJob ? <button type="button" onClick={() => navigate(`/generations/${activeJob.id}`)}>진행 중인 요청 확인</button> : <button disabled={staleGuidance || busy || !selectedReferences.length || !policy.enabled || !policy.remaining || tooLarge || promptTooLong || !rights || !brief.trim() ||  !!context.blocked_reason || context.read_only}>{busy ? (preparing ? '이미지 준비 중…' : '요청 중…') : ambiguous ? '같은 프로젝트 요청 상태 확인' : context.type_name ? '이 분류 시안 1장 만들기' : '프로젝트 시안 1장 만들기'}</button>}
     </form>
     <details id="history" open={window.location.hash === '#history' || undefined} className="generation-history"><summary>프로젝트 시안 이력 · {history.length}개</summary><p className="hint">최근 100개 · 과거 단일 참고 시안은 프로젝트 종합 결과와 구분합니다.</p>
       {!history.length && <p className="hint">아직 생성한 프로젝트 시안이 없습니다.</p>}

@@ -3,6 +3,7 @@ import { api, ApiError, errorMessage, getSession, login, signup, saveSession, pr
   type DeliverableType, type Page, type Path, type Project, type Reference, type Preview } from './lib/api'
 import { Thumbnail, ImagePicker } from './Thumbnail'
 import { ProjectHeader } from './ProjectHeader'
+import { ReferenceGuidance } from './ReferenceGuidance'
 import { CollectPage } from './CollectPage'
 import { GenerationPage } from './GenerationPage'
 import { LegacyGenerationRedirect, ProjectGenerationPage } from './ProjectGenerationPage'
@@ -375,6 +376,7 @@ function DetailPage({id, search}: {id: string; search: string}) {
   const draftRoute = '/references/' + id
   const ownerId = getSession()?.user.id ?? ''
   const [editing, setEditing] = useState(!!readDraft(draftRoute))
+  const [guidanceDirty, setGuidanceDirty] = useState(false)
   const [note, setNote] = useState(readDraft(draftRoute)?.note ?? '')
   useEffect(() => {if (editing) drafts.set(draftRoute, {ownerId, values: {note}})}, [draftRoute, ownerId, editing, note])
   const [busy, setBusy] = useState(false)
@@ -406,7 +408,7 @@ function DetailPage({id, search}: {id: string; search: string}) {
     }, 250)
     return () => {active = false; clearTimeout(timer)}
   }, [data])
-  useDirty(editing && note !== (data?.design_note ?? ''))
+  useDirty((editing && note !== (data?.design_note ?? '')) || guidanceDirty)
   if (error) return <ErrorState message={error} retry={reload} />
   if (!data) return <Loading />
   const base = `/projects/${data.project_id}/types/${data.deliverable_type_id}`
@@ -449,7 +451,7 @@ function DetailPage({id, search}: {id: string; search: string}) {
         }}><label>디자인 포인트 메모<textarea autoFocus disabled={busy} maxLength={5000} rows={4} value={note} onChange={event => setNote(event.target.value)} /></label>
           {saveError && <p className="error" role="alert">{saveError}</p>}<div className="form-actions"><button className="secondary" type="button" disabled={busy} onClick={() => {if (!dirty || window.confirm('수정 중인 메모를 버릴까요?')) {drafts.delete(draftRoute); setEditing(false)}}}>취소</button><button disabled={busy}>{busy ? '저장 중…' : '메모 저장'}</button></div>
         </form> : <p className={`note-content ${!data.design_note ? 'muted' : ''}`}>{data.design_note || '참고하고 싶은 디자인 포인트를 남겨보세요.'}</p>}
-      </section><div className="inspector-footer"><span>저장 {date(data.created_at)}</span><span>수정 {date(data.updated_at)}</span></div>{saved && <p role="status" className="success">메모를 저장했습니다.</p>}</article>
+      </section><ReferenceGuidance key={data.id} reference={data} onSaved={reload} onDirtyChange={setGuidanceDirty} /><div className="inspector-footer"><span>저장 {date(data.created_at)}</span><span>수정 {date(data.updated_at)}</span></div>{saved && <p role="status" className="success">메모를 저장했습니다.</p>}</article>
     </div></div>
 }
 

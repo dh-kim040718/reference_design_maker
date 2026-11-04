@@ -30,8 +30,39 @@ class ClassificationPatch(Input):
         return self
 
 
+class RegionNote(Input):
+    x: float = Field(ge=0, le=1, allow_inf_nan=False)
+    y: float = Field(ge=0, le=1, allow_inf_nan=False)
+    width: float = Field(gt=0, le=1, allow_inf_nan=False)
+    height: float = Field(gt=0, le=1, allow_inf_nan=False)
+    note: str = Field(min_length=1, max_length=500)
+
+    @model_validator(mode="after")
+    def inside_image(self):
+        if self.x + self.width > 1.000001 or self.y + self.height > 1.000001:
+            raise ValueError("영역은 이미지 안에 지정해 주세요.")
+        return self
+
+
+class DesignGuidance(Input):
+    roles: list[Literal["mood", "layout", "color", "components", "typography", "icons", "imagery",
+                        "spacing", "hierarchy", "density", "buttons", "navigation", "forms",
+                        "tables", "charts", "surfaces"]] = Field(default_factory=list, max_length=16)
+    regions: list[RegionNote] = Field(default_factory=list, max_length=6)
+    image_version: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def valid_guidance(self):
+        if len(self.roles) != len(set(self.roles)):
+            raise ValueError("참고 역할을 중복 지정할 수 없습니다.")
+        if self.regions and not self.image_version:
+            raise ValueError("영역에 사용할 이미지 버전이 필요합니다.")
+        return self
+
+
 class NoteInput(Input):
     design_note: str | None = Field(default=None, max_length=5000)
+    design_guidance: DesignGuidance | None = None
 
     @field_validator("design_note")
     @classmethod

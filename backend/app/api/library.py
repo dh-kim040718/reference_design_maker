@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.preview_cache import cached_preview
+from app.api.reference_guidance import guidance_data, preview_version
 from app.api.schemas import (
     ClassificationPatch,
     NameInput,
@@ -88,13 +89,13 @@ def writable(parent: Project, kind: DeliverableType | None = None):
 def serialize(item, **extra):
     result = {}
     for column in item.__table__.columns:
-        if column.name == "owner_id":
+        if column.name in {"owner_id", "design_guidance_json"}:
             continue
         value = getattr(item, column.name)
         if hasattr(value, "tzinfo") and value.tzinfo is None:
             value = value.replace(tzinfo=UTC)
         result[column.name] = value
-    return {**result, **extra}
+    return {**result, **(guidance_data(item) if isinstance(item, Reference) else {}), **extra}
 
 
 def kind_data(item, parent):
@@ -269,7 +270,11 @@ def create_reference(body: ReferenceInput, db: DB, user: User):
         fail(422, "PATH_MISMATCH", "선택한 프로젝트의 산출물 유형을 선택해 주세요.")
     kind, parent = category(db, user, kind.id, True)
     writable(parent, kind)
-    item = Reference(**body.model_dump(exclude={"project_id"}))
+    item = Reference(**body.model_dump(exclude={"project_id", "design_guidance"}))
+    if body.design_guidance:
+        if body.design_guidance.regions and (not body.preview_url or body.design_guidance.image_version != preview_version(body.preview_url)):
+            fail(409, "PREVIEW_CHANGED", "저장할 이미지에서 참고 영역을 다시 확인해 주세요.")
+        item.design_guidance_json = body.design_guidance.model_dump_json()
     db.add(item)
     # Dialect upserts serialize first-use preferences without a read/insert race.
     if db.bind.dialect.name == "postgresql":
@@ -317,6 +322,11 @@ def update_reference(item_id: UUID, body: NoteInput, db: DB, user: User):
     writable(parent, kind)
     if "design_note" in body.model_fields_set:
         item.design_note = body.design_note
+    if "design_guidance" in body.model_fields_set:
+        value = body.design_guidance
+        if value and value.regions and (not item.preview_url or value.image_version != preview_version(item.preview_url)):
+            fail(409, "PREVIEW_CHANGED", "이미지가 변경됐습니다. 새 이미지에서 참고 영역을 다시 확인해 주세요.")
+        item.design_guidance_json = value.model_dump_json() if value else None
     db.commit()
     return ref_data(item, kind, parent)
 

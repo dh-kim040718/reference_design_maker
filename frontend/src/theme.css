@@ -27,6 +27,72 @@ h1,h2,h3 {color:var(--color-text);letter-spacing:-.035em}
 .project-library-header .project-history-link {margin-left:auto;font-size:12px;color:var(--color-muted);text-decoration:none;white-space:nowrap}
 .project-library-header .project-history-link+.project-add {margin-left:0;background:var(--color-hover);color:var(--color-text)}
 .generation-history:target {scroll-margin-top:20px}
+.reference-guidance {padding:14px 0 8px;border-top:1px solid var(--color-border)}
+.reference-guidance h2 {font-size:15px;margin:0}
+.reference-guidance .sr-only {position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.reference-guidance form {display:flex;flex-direction:column;gap:14px;margin-top:0}
+.reference-guidance label {margin:0}
+.reference-guidance p {margin:0;line-height:1.6}
+.reference-guidance fieldset>.hint {margin-top:8px}
+.reference-guidance .form-actions {margin:0;gap:8px;flex-shrink:0}
+.reference-guidance .text-button {align-self:flex-start}
+.reference-guidance fieldset {min-width:0;border:0;padding:0;margin:0}
+.reference-guidance legend {font-size:13px;font-weight:600;margin-bottom:8px}
+.reference-guidance .guidance-role-row {display:block;padding-bottom:10px;border-bottom:1px solid var(--color-border)}
+.guidance-role-row legend {float:none;margin:0 0 8px;font-size:12px;line-height:20px}
+.guidance-role-row>.hint {font-size:11px;margin:8px 0 0;text-align:right}
+.guidance-role-groups {display:flex;flex-direction:column;gap:6px}
+.guidance-role-group {display:grid;grid-template-columns:48px minmax(0,1fr);align-items:start;gap:8px}
+.guidance-role-group>span {font-size:11px;color:var(--color-muted);line-height:28px}
+.guidance-role-options {display:flex;flex-wrap:wrap;gap:6px}
+.guidance-role-options label {display:flex;align-items:center;gap:6px;background:var(--color-subtle);border-radius:5px;padding:6px 8px;font-size:12px;font-weight:500;cursor:pointer}
+.guidance-role-options label:has(input:checked) {background:#e4e4e8;color:var(--color-text);font-weight:600}
+.guidance-role-options input {margin:0;width:14px;height:14px;min-height:0;padding:0;flex-shrink:0}
+.guidance-summary {display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+.guidance-summary span {font-size:11px;background:var(--color-hover);border-radius:4px;padding:3px 7px;color:var(--color-text)}
+.guidance-workspace {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr);gap:16px;align-items:start}
+.guidance-image-panel,.guidance-notes-panel {min-width:0}
+.guidance-panel-heading {display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;margin-bottom:6px;font-size:12px}
+.guidance-panel-heading>span,.guidance-panel-heading strong>span {font-size:11px;color:var(--color-muted);font-weight:400}
+.guidance-panel-heading button.text-button {font-size:11px;min-height:26px;padding:4px 6px}
+.guidance-panel-heading strong>span {margin-left:4px}
+.guidance-canvas-wrap {display:flex;align-items:center;justify-content:center;background:var(--color-subtle);border-radius:6px;padding:10px;min-height:220px;overflow:auto}
+.guidance-canvas {display:inline-block;position:relative;max-width:100%;vertical-align:top;line-height:0;user-select:none}
+.guidance-canvas.drawable {cursor:crosshair;touch-action:none}
+.guidance-canvas img {display:block;max-width:100%;max-height:320px;width:auto;height:auto}
+.guidance-box {position:absolute;pointer-events:none;border:2px solid #252528;background:rgb(255 255 255 / 18%);box-sizing:border-box}
+.guidance-box b {position:absolute;top:0;left:0;min-width:18px;height:18px;background:#252528;color:white;font-size:11px;line-height:18px;text-align:center}
+.guidance-region-list {display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto}
+.reference-guidance .guidance-region-editor {padding:10px;background:var(--color-subtle);border-radius:6px;flex-shrink:0}
+.guidance-region-heading {display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;font-size:12px}
+.guidance-region-heading strong {display:flex;align-items:center;gap:6px;font-weight:600}
+.guidance-region-heading strong>span {display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;font-size:11px;background:var(--color-text);color:white;border-radius:3px}
+.guidance-region-heading button.text-button {font-size:11px;padding:3px 4px;min-height:24px;color:var(--color-muted)}
+.guidance-region-heading button.text-button:hover {color:#ad302c}
+.guidance-region-editor textarea {margin:0;min-height:64px;padding:8px 10px;font-size:12px;line-height:1.6;border-radius:5px}
+.guidance-empty {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:220px;text-align:center;padding:10px;color:var(--color-muted)}
+.guidance-empty-mark {font-size:24px;color:#a0a0a8;line-height:1}
+.guidance-empty strong {font-size:12px;color:var(--color-text);font-weight:500}
+.guidance-empty p {font-size:12px}
+.guidance-footer {display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:12px;border-top:1px solid var(--color-border)}
+.guidance-region-editor label {font-size:12px}
+.guidance-region-editor summary,.guidance-region-details summary {font-size:12px;cursor:pointer;padding:8px 0}
+.guidance-coordinates {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.guidance-region-note,.guidance-region-details p {font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.guidance-region-note strong {font-size:11px;color:var(--color-muted);margin-right:6px}
+@media(max-width:600px) {
+  .guidance-workspace {grid-template-columns:minmax(0,1fr);gap:12px}
+  .guidance-role-row legend {float:none;width:100%;line-height:20px}
+  .guidance-role-row>.hint {width:100%;margin:8px 0 0}
+  .guidance-canvas-wrap {min-height:0}
+  .guidance-canvas img {max-height:280px}
+  .guidance-empty {min-height:0;align-items:flex-start;text-align:left;padding:12px;background:var(--color-subtle);border-radius:6px;gap:4px}
+  .guidance-empty-mark {display:none}
+  .guidance-empty br {display:none}
+  .guidance-coordinates {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .guidance-footer {justify-content:flex-end}
+  .guidance-footer>.hint {display:none}
+}
 .project-library-header h1 {font-weight:650;font-size:19px}
 .project-library-tabs {align-self:flex-end;height:38px;gap:20px}
 .project-library-tabs a {font-weight:500;line-height:20px;padding:7px 0 9px;gap:6px}

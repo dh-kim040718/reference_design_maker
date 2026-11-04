@@ -16,7 +16,7 @@ from app.db.base import Base
 from app.db.models import Generation, GenerationBudget, Reference, now
 from app.db.session import build_engine
 
-SCHEMA = "0009_project_concepts"
+SCHEMA = "0010_reference_guidance"
 FORMAT = "rdm-app-backup-v1"
 ROOT = REPOSITORY_ROOT / ".phase6-backups"
 
@@ -58,7 +58,7 @@ def snapshot(engine, destination):
             elif engine.dialect.name == "sqlite":
                 connection.exec_driver_sql("BEGIN")
             version = connection.scalar(text("SELECT version_num FROM alembic_version"))
-            if version not in {"0007_safe_diagnostics", "0008_budget_reservations", SCHEMA}:
+            if version not in {"0007_safe_diagnostics", "0008_budget_reservations", "0009_project_concepts", SCHEMA}:
                 raise ValueError("Unsupported application schema")
             metadata = Base.metadata
             if version != SCHEMA:
@@ -85,7 +85,7 @@ def load_snapshot(path):
     try:
         package = json.loads(Path(path).read_text("utf-8"))
         data = package["snapshot"]
-        supported = {"0007_safe_diagnostics", "0008_budget_reservations", SCHEMA}
+        supported = {"0007_safe_diagnostics", "0008_budget_reservations", "0009_project_concepts", SCHEMA}
         if (package["sha256"] != digest(data) or data["format"] != FORMAT
                 or data["schema"] not in supported):
             raise ValueError("Integrity or version mismatch")
@@ -106,6 +106,11 @@ def load_snapshot(path):
                 row.setdefault("project_id", references.get(row["reference_id"]))
                 row.setdefault("scope", "reference")
                 row.setdefault("project_snapshot_json", None)
+            data.setdefault("restored_from_schema", data["schema"])
+            data["schema"] = "0009_project_concepts"
+        if data["schema"] == "0009_project_concepts":
+            for row in data["tables"]["references"]:
+                row.setdefault("design_guidance_json", None)
             data.setdefault("restored_from_schema", data["schema"])
             data["schema"] = SCHEMA
         expected = {table.name for table in Base.metadata.sorted_tables}

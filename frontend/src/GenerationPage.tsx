@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, errorMessage, type Reference } from './lib/api'
 import { RegionPrototype } from './RegionPrototype'
 import { GenerationMetrics } from './GenerationMetrics'
+import { GuidanceSummary } from './ReferenceGuidance'
+import type { DesignGuidance } from './lib/api'
 
 interface Policy {enabled: boolean; remaining: number; daily_limit: number; model: string; reason?: string}
-interface Job {id: string; reference_id: string | null; project_id?: string | null; scope?: string; status: string; operation?: string; direction?: string; instruction: string; note_snapshot: string; result_image?: string | null; error_code?: string; provider_reason?: string | null; elapsed_ms?: number; usage?: {total_tokens?: number}; project_snapshot?: {type_id?: string; project_name: string; brief: string; references: {id: string; title: string; type_name: string; design_note: string}[]}}
+interface Job {id: string; reference_id: string | null; project_id?: string | null; scope?: string; status: string; operation?: string; direction?: string; instruction: string; note_snapshot: string; result_image?: string | null; error_code?: string; provider_reason?: string | null; elapsed_ms?: number; usage?: {total_tokens?: number}; project_snapshot?: {type_id?: string; project_name: string; brief: string; references: {id: string; title: string; type_name: string; design_note: string; design_guidance?: DesignGuidance}[]}}
 const labels: Record<string, string> = {queued: '생성 대기 중', processing: 'AI 시안 생성 중…', succeeded: '생성 완료', failed: '생성 실패', unknown: '결과 확인 필요'}
 const diagnosticMessages: Record<string, string> = {
   authentication: '서버의 AI 인증 설정을 확인해야 합니다.',
@@ -101,7 +103,7 @@ export function GenerationPage({referenceId, jobId, fromJobId, navigate}: {refer
       {(job.result_image || job.status === 'succeeded') && <div className="generation-primary-actions">{job.result_image && <a className="button" href={job.result_image} download={`ai-concept-${job.id}.png`}>AI 시안 다운로드</a>}
         {job.status === 'succeeded' && <button type="button" className="text-button" title="입력과 조건을 검토하는 화면으로 이동합니다" onClick={() => navigate(projectPath ? job.scope === 'project' ? `${projectPath}${projectPath.includes('?') ? '&' : '?'}from=${encodeURIComponent(job.id)}` : projectPath : `/references/${job.reference_id}/generate?from=${encodeURIComponent(job.id)}`)}>{job.scope === 'reference' && projectPath ? '프로젝트 전체 시안 만들기' : '다른 시안 만들기 →'}</button>}
       </div>}
-      {job.project_snapshot && <details className="generation-notes"><summary>입력 내용 자세히</summary><h3>프로젝트 요구사항</h3><p>{job.project_snapshot.brief}</p><h3>검토한 레퍼런스 {job.project_snapshot.references.length}개</h3>{job.project_snapshot.references.map((row, index) => <div className="concept-snapshot-note" key={row.id}><strong>{index + 1}. {row.title} · {row.type_name}</strong><p>{row.design_note || '메모 없이 이미지 참고'}</p></div>)}</details>}
+      {job.project_snapshot && <details className="generation-notes"><summary>입력 내용 자세히</summary><h3>프로젝트 요구사항</h3><p>{job.project_snapshot.brief}</p><h3>검토한 레퍼런스 {job.project_snapshot.references.length}개</h3>{job.project_snapshot.references.map((row, index) => <div className="concept-snapshot-note" key={row.id}><strong>{index + 1}. {row.title} · {row.type_name}</strong><p>{row.design_note || '메모 없이 이미지 참고'}</p><GuidanceSummary value={row.design_guidance} />{row.design_guidance?.regions.map((region, i) => <p key={i}>영역 {i + 1} · {region.note}</p>)}</div>)}</details>}
       {(!job.project_snapshot || job.instruction) && <details className="generation-notes"><summary>{job.project_snapshot ? '추가 요청' : '생성에 사용한 메모'}</summary>{!job.project_snapshot && <p>{job.note_snapshot || '메모 없이 전체 이미지 참고'}</p>}{job.instruction && <p>{job.instruction}</p>}</details>}
       {job.elapsed_ms != null && <details className="generation-notes"><summary>생성 정보</summary><p>처리 시간 {(job.elapsed_ms / 1000).toFixed(1)}초<br />사용량 {job.usage?.total_tokens != null ? `${job.usage.total_tokens} 토큰` : '제공자 사용량 미제공'}</p><p className="hint">실제 청구액은 제공자 사용 내역에서 확인해 주세요.</p></details>}
       {!['queued', 'processing'].includes(job.status) && <button className="text-button generation-result-delete" disabled={busy} onClick={async () => {

@@ -58,6 +58,7 @@ class Reference(Timestamps, Base):
     title: Mapped[str | None] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text)
     design_note: Mapped[str | None] = mapped_column(Text)
+    design_guidance_json: Mapped[str | None] = mapped_column(Text)
     __table_args__ = (Index("ix_references_type", "deliverable_type_id", "created_at", "id"),)
 
 

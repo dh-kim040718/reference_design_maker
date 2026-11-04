@@ -179,3 +179,14 @@ it('keeps paid generation disabled and labels legacy history distinctly', async 
   expect(screen.getByRole('button', {name: /과거 단일 참고 시안/})).toBeInTheDocument()
   expect(screen.getByRole('button', {name: '프로젝트 시안 1장 만들기'})).toBeDisabled()
 })
+
+it('shows saved guidance and blocks generation until changed-image regions are reviewed', async () => {
+  const guided = {...context, references: [{...references[0], guidance_stale: true, design_guidance: {roles: ['color'], regions: [{x: .1, y: .1, width: .3, height: .2, note: 'Use the chart'}]}}], total: 1}
+  setup({input: guided})
+  render(<ProjectGenerationPage projectId="p" navigate={vi.fn()} />)
+  await prepare()
+  expect(screen.getByText('컬러')).toBeInTheDocument()
+  expect(screen.getByText('영역 메모 1개')).toBeInTheDocument()
+  expect(screen.getByRole('button', {name: '프로젝트 시안 1장 만들기'})).toBeDisabled()
+  expect(api).not.toHaveBeenCalledWith('/projects/p/generations', 'POST', expect.anything())
+})
