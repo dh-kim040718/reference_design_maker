@@ -48,3 +48,17 @@ it('does not offer editing on archived references', () => {
   setup({...reference, read_only: true})
   expect(screen.queryByRole('button', {name: '참고 요소 지정'})).not.toBeInTheDocument()
 })
+
+it('moves in the labelled direction and stops at image boundaries', () => {
+  setup({...reference, design_guidance: {roles: [], image_version: 'a'.repeat(64), regions: [{x: .01, y: .01, width: .4, height: .3, note: 'Header'}]}})
+  fireEvent.click(screen.getByRole('button', {name: '참고 요소 지정'}))
+  fireEvent.click(screen.getByRole('button', {name: '영역 1 위 방향으로 이동'}))
+  expect(screen.getByLabelText('영역 1 y')).toHaveValue(0)
+  expect(screen.getByRole('button', {name: '영역 1 위 방향으로 이동'})).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', {name: '영역 1 왼쪽 방향으로 이동'}))
+  expect(screen.getByLabelText('영역 1 x')).toHaveValue(0)
+  fireEvent.click(screen.getByRole('button', {name: '영역 1 아래 방향으로 이동'}))
+  expect(screen.getByLabelText('영역 1 y')).toHaveValue(1)
+  fireEvent.click(screen.getByRole('button', {name: '영역 1 오른쪽 방향으로 이동'}))
+  expect(screen.getByLabelText('영역 1 x')).toHaveValue(1)
+})

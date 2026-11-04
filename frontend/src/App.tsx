@@ -426,8 +426,11 @@ function DetailPage({id, search}: {id: string; search: string}) {
         <Thumbnail url={item.preview_url} label={item.title || host(item.source_url)} /><div><strong>{item.title || host(item.source_url)}</strong><span>{host(item.source_url)}</span><p>{item.design_note || '메모 없음'}</p></div></Link>)}</div>
       {siblings.error && <p className="hint">다른 레퍼런스를 불러오지 못했습니다. <button className="text-button" onClick={siblings.reload}>다시 불러오기</button></p>}
       {siblings.data && siblings.data.total > siblings.data.items.length && <Link to={base}>전체 목록 보기 →</Link>}
-    </aside><article className="detail inspector"><div className="inspector-summary"><div className="inspector-visual"><Thumbnail className="inspector-image" url={data.preview_url} label={data.title || host(data.source_url)} />
-      {!data.read_only && <><div className="thumbnail-actions"><ImagePicker showHint={false} disabled={thumbnailBusy} label={data.preview_url ? '이미지 변경' : '이미지 선택'} onChange={value => saveThumbnail(value, 'user_upload')} />
+    </aside><article className="detail inspector"><div className="inspector-summary"><div className="inspector-visual"><Thumbnail className="inspector-image" url={data.preview_url} label={data.title || host(data.source_url)} /></div>
+      <div className="inspector-info"><div className="inspector-title"><h1>{data.title || host(data.source_url)}</h1></div>
+      <div className="reference-location"><Link to={`/projects/${data.project_id}`}>{data.project_name}</Link><span>/</span><span>{data.deliverable_type_name}</span></div>
+      <a className="inspector-source" href={data.source_url} title={data.source_url} aria-label={`원본 열기: ${host(data.source_url)}`} target="_blank" rel="noopener noreferrer"><span>출처</span><span>{host(data.source_url)} ↗</span></a>
+      {!data.read_only && <details className="inspector-image-tools"><summary>이미지 관리</summary><div className="thumbnail-actions"><ImagePicker showHint={false} disabled={thumbnailBusy} label={data.preview_url ? '이미지 변경' : '이미지 선택'} onChange={value => saveThumbnail(value, 'user_upload')} />
         <button className="secondary" disabled={thumbnailBusy} onClick={async () => {
           setThumbnailBusy(true); setThumbnailError('')
           try {
@@ -435,12 +438,8 @@ function DetailPage({id, search}: {id: string; search: string}) {
             if (preview.preview_url) await saveThumbnail(preview.preview_url, 'page_metadata')
             else setThumbnailError(previewFailureMessage(preview))
           } catch (error) {setThumbnailError(errorMessage(error))} finally {setThumbnailBusy(false)}
-        }}>{thumbnailBusy ? '처리 중…' : '링크에서 불러오기'}</button></div><p className="image-help">이미지를 복사한 뒤 <kbd>Ctrl</kbd> + <kbd>V</kbd>로 붙여넣기</p></>}
+        }}>{thumbnailBusy ? '처리 중…' : '링크에서 불러오기'}</button></div><p className="image-help">이미지 복사 후 <kbd>Ctrl</kbd> + <kbd>V</kbd>로 붙여넣기</p></details>}
       {thumbnailError && <p className="hint" role="status">{thumbnailError}</p>}
-      </div><div className="inspector-info"><div className="inspector-title"><p className="domain">{host(data.source_url)}</p><h1>{data.title || host(data.source_url)}</h1></div>
-      <div className="reference-location"><Link to={`/projects/${data.project_id}`}>{data.project_name}</Link><span>/</span><span>{data.deliverable_type_name}</span></div>
-      <a className="button secondary source-button" href={data.source_url} target="_blank" rel="noopener noreferrer">원본 열기 ↗</a>
-      <a className="source-url" href={data.source_url} title={data.source_url} target="_blank" rel="noopener noreferrer">{data.source_url}</a>
       </div></div>
       {data.read_only && <p className="notice">보관된 경로입니다. 메모 수정은 보관 해제 후 가능합니다.</p>}
       <section className="note-section"><div className="section-heading"><h2>디자인 메모</h2>{!editing && !data.read_only && <button className="secondary note-edit-button" onClick={() => {setNote(data.design_note ?? ''); setEditing(true); setSaved(false)}}>메모 수정</button>}</div>
