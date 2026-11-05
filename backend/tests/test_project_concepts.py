@@ -26,10 +26,16 @@ def synthesis(generation):
     project_id = ref["project_id"]
     client.patch(f"/api/v1/projects/{project_id}/brief", json={"brief": "Logistics dashboard"})
     client.patch(f"/api/v1/references/{ref['id']}", json={"design_note": "Use this layout"})
-    kind = client.post(f"/api/v1/projects/{project_id}/deliverable-types",
-                       json={"name": "Charts"}).json()
-    second = save(client, {"id": project_id}, kind,
-                  design_note="Use this chart style", title="Chart reference").json()
+    kind = client.post(
+        f"/api/v1/projects/{project_id}/deliverable-types", json={"name": "Charts"}
+    ).json()
+    second = save(
+        client,
+        {"id": project_id},
+        kind,
+        design_note="Use this chart style",
+        title="Chart reference",
+    ).json()
     client.patch(f"/api/v1/deliverable-types/{kind['id']}", json={"archived": True})
     calls = []
 
@@ -44,7 +50,10 @@ def synthesis(generation):
 def test_remote_thumbnail_is_visible_without_becoming_generation_input(synthesis):
     client, project_id, ref, _, _, _ = synthesis
     url = "https://i.pinimg.com/736x/example.jpg"
-    client.patch(f"/api/v1/references/{ref['id']}/thumbnail", json={"preview_url": url, "preview_source": "page_metadata"})
+    client.patch(
+        f"/api/v1/references/{ref['id']}/thumbnail",
+        json={"preview_url": url, "preview_source": "page_metadata"},
+    )
     context = client.get(f"/api/v1/projects/{project_id}/generation-context").json()
     row = next(row for row in context["references"] if row["id"] == ref["id"])
     assert row["thumbnail_url"] == url
@@ -54,16 +63,27 @@ def test_remote_thumbnail_is_visible_without_becoming_generation_input(synthesis
 def test_classification_generation_includes_all_and_only_its_references(synthesis):
     client, project_id, ref, second, calls, _ = synthesis
     type_id = ref["deliverable_type_id"]
-    current = client.get(f"/api/v1/projects/{project_id}/generation-context?type_id={type_id}").json()
+    current = client.get(
+        f"/api/v1/projects/{project_id}/generation-context?type_id={type_id}"
+    ).json()
     assert [row["id"] for row in current["references"]] == [ref["id"]]
-    data = {"request_id": str(uuid4()), "type_id": type_id,
-            "context_digest": current["context_digest"], "rights_confirmed": True,
-            "sources": [{"reference_id": ref["id"], "image": image()}]}
+    data = {
+        "request_id": str(uuid4()),
+        "type_id": type_id,
+        "context_digest": current["context_digest"],
+        "rights_confirmed": True,
+        "sources": [{"reference_id": ref["id"], "image": image()}],
+    }
     result = client.post(f"/api/v1/projects/{project_id}/generations", json=data)
     assert result.status_code == 202, result.text
     assert len(calls) == 1 and len(calls[0][0]) == 1
     assert "Use this layout" in calls[0][1] and "Use this chart style" not in calls[0][1]
-    assert client.get(f"/api/v1/projects/{project_id}/generation-context?type_id={uuid4()}").status_code == 404
+    assert (
+        client.get(
+            f"/api/v1/projects/{project_id}/generation-context?type_id={uuid4()}"
+        ).status_code
+        == 404
+    )
 
 
 def test_current_brief_is_used_and_snapshotted_without_saving_first(synthesis):
@@ -99,16 +119,25 @@ def test_explicit_reference_selection_excludes_unchecked_notes_and_images(synthe
 def test_invalid_or_incomplete_selection_never_calls_provider(synthesis, selection):
     client, project_id, ref, _, calls, _ = synthesis
     data = request_data(client, project_id)
-    data["selected_reference_ids"] = [] if not selection else [str(uuid4())] if selection == ["unknown"] else [ref["id"], ref["id"]]
+    data["selected_reference_ids"] = (
+        []
+        if not selection
+        else [str(uuid4())]
+        if selection == ["unknown"]
+        else [ref["id"], ref["id"]]
+    )
     assert client.post(f"/api/v1/projects/{project_id}/generations", json=data).status_code == 422
     assert not calls
 
 
 def request_data(client, project_id):
     context = client.get(f"/api/v1/projects/{project_id}/generation-context").json()
-    return {"request_id": str(uuid4()), "context_digest": context["context_digest"],
-            "sources": [{"reference_id": row["id"], "image": image()}
-                        for row in context["references"]], "rights_confirmed": True}
+    return {
+        "request_id": str(uuid4()),
+        "context_digest": context["context_digest"],
+        "sources": [{"reference_id": row["id"], "image": image()} for row in context["references"]],
+        "rights_confirmed": True,
+    }
 
 
 def test_all_classifications_images_and_notes_are_synthesized_and_snapshotted(synthesis):
@@ -194,8 +223,18 @@ def test_reference_and_prompt_limits_do_not_silently_sample(synthesis, monkeypat
     client, project_id, _, _, calls, _ = synthesis
     monkeypatch.setattr(project_concepts, "MAX_REFERENCES", 1)
     context = client.get(f"/api/v1/projects/{project_id}/generation-context").json()
-    assert context["total"] == 2 and context["blocked_reason"] == "reference_limit"
-    assert not context["references"]  # Explicitly blocked, never represented as a complete subset.
+    assert context["total"] == 2 and not context["blocked_reason"]
+    assert len(context["references"]) == 2
+    data = request_data(client, project_id)
+    path = f"/api/v1/projects/{project_id}/generations"
+    assert client.post(path, json=data).status_code == 422
+    chosen = context["references"][0]["id"]
+    data.update(
+        selected_reference_ids=[chosen], sources=[{"reference_id": chosen, "image": image()}]
+    )
+    assert client.post(path, json=data).status_code == 202
+    assert len(calls) == 1 and len(calls[0][0]) == 1
+    calls.clear()
     monkeypatch.setattr(project_concepts, "MAX_REFERENCES", 16)
     data = request_data(client, project_id)
     monkeypatch.setattr(project_concepts, "MAX_PROMPT_CHARS", 10)
@@ -225,9 +264,15 @@ def test_project_provider_sends_every_image_in_matching_order(monkeypatch):
         return httpx.Response(200, json={"data": [{"b64_json": image().split(",")[1]}]})
 
     original = httpx.Client
-    monkeypatch.setattr(generation_provider, "get_settings", lambda: Settings(
-        _env_file=None, openai_api_key=SecretStr("offline-fake-key")))
-    monkeypatch.setattr(generation_provider.httpx, "Client", lambda **kwargs: original(
-        transport=httpx.MockTransport(handle), **kwargs))
+    monkeypatch.setattr(
+        generation_provider,
+        "get_settings",
+        lambda: Settings(_env_file=None, openai_api_key=SecretStr("offline-fake-key")),
+    )
+    monkeypatch.setattr(
+        generation_provider.httpx,
+        "Client",
+        lambda **kwargs: original(transport=httpx.MockTransport(handle), **kwargs),
+    )
     generation_provider.generate_project(sources, "Numbered image notes", "hash")
     assert calls == [1]

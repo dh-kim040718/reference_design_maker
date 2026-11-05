@@ -190,6 +190,16 @@ try {
     if (process.argv.includes('--guidance')) await until("[...document.querySelectorAll('.concept-inputs .guidance-summary')].some(x=>x.innerText.includes('컬러') && x.innerText.includes('영역 메모 1개'))")
     if (!await evaluate("document.body.innerText.includes('큰 제목과 여백을 참고합니다.') && document.body.innerText.includes('차트 막대 표현을 참고합니다.')")) throw new Error('Cross-classification notes missing')
     await fill('textarea[maxlength="5000"]', '데스크톱 대시보드: 전체 배치와 차트를 종합해 주세요.')
+    if (process.argv.includes('--design-settings')) {
+      await evaluate("document.querySelector('.design-purpose-trigger').click()")
+      await until("!!document.querySelector('.design-purpose-option[data-value=poster]')")
+      await screenshot('design-purpose-presets')
+      await evaluate("document.querySelector('.design-purpose-option[data-value=poster]').click()")
+      await until("!!document.querySelector('.design-ppi input')")
+      await fill('.design-dimensions label:first-child input','210')
+      await fill('.design-dimensions label:nth-child(2) input','297')
+      await until("document.querySelector('.design-output-preview')?.innerText.includes('2,480 × 3,508')")
+    }
     if (await evaluate("[...document.querySelectorAll('button')].some(x=>x.textContent==='요구사항 저장')")) throw new Error('Separate requirements save step remains')
     if (process.argv.includes('--thumbnail')) {
       await until("document.querySelectorAll('.concept-image img').length===2")
@@ -206,6 +216,13 @@ try {
     await screenshot('project-generation-disabled')
     await command('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:true})
     await screenshot('project-generation-mobile')
+    if (process.argv.includes('--design-settings')) {
+      await evaluate("document.querySelector('.design-purpose-trigger').click()")
+      await until("!!document.querySelector('.design-purpose-popover')")
+      await screenshot('design-purpose-presets-mobile')
+      if(await evaluate('document.documentElement.scrollWidth>innerWidth')) throw new Error('Purpose preset picker mobile overflow')
+      await evaluate("document.querySelector('.design-purpose-trigger').click()")
+    }
     if (await evaluate('document.documentElement.scrollWidth>innerWidth')) throw new Error('Project generation mobile overflow')
     await command('Page.navigate', {url:detailUrl})
     await until("!!document.querySelector('.inspector')")

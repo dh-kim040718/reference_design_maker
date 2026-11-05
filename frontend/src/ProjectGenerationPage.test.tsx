@@ -26,6 +26,32 @@ async function prepare() {
   fireEvent.click(await screen.findByRole('checkbox', {name: /사용할 권한/}))
 }
 
+it('explains unmet requirements beside the CTA and links to the editable field', async () => {
+  setup({input:{...context,brief:''}})
+  render(<ProjectGenerationPage projectId="p" navigate={vi.fn()}/> )
+  const hint = await screen.findByRole('link',{name:'어떤 디자인을 만들지 요구사항을 입력해 주세요.'})
+  expect(hint).toHaveAttribute('href','#concept-brief-input')
+  await prepare()
+  const button = screen.getByRole('button',{name:'프로젝트 시안 1장 만들기'})
+  expect(button).toBeDisabled()
+  expect(button).toHaveAttribute('aria-describedby','concept-blockers')
+  fireEvent.change(screen.getByLabelText('어떤 디자인을 만들까요?'),{target:{value:'모바일 화면'}})
+  expect(button).toBeEnabled()
+  expect(screen.queryByText('생성 전 확인')).not.toBeInTheDocument()
+})
+
+it('explains a daily limit even when generation is enabled and rights are confirmed', async () => {
+  setup()
+  const original = vi.mocked(api).getMockImplementation()!
+  vi.mocked(api).mockImplementation(async(path,method,body)=>path==='/generation-policy'
+    ? {enabled:true,remaining:0,daily_limit:3} : original(path,method,body))
+  render(<ProjectGenerationPage projectId="p" navigate={vi.fn()}/> )
+  await prepare()
+  expect(screen.getByText(/오늘의 생성 횟수를 모두 사용했습니다/)).toBeInTheDocument()
+  expect(screen.getByRole('button',{name:'프로젝트 시안 1장 만들기'})).toBeDisabled()
+  expect(api).not.toHaveBeenCalledWith(expect.anything(),'POST',expect.anything())
+})
+
 it('supports partial selection, select all, clear all, and submits only checked references', async () => {
   setup({input: {...context, references: [references[0], {...references[1], preview_url: null}]}})
   const navigate = vi.fn()
@@ -131,11 +157,17 @@ it('does not silently generate from only the prepared subset', async () => {
   expect(api).not.toHaveBeenCalledWith(expect.anything(), 'POST', expect.anything())
 })
 
-it('shows an explicit whole-project limit without pretending a subset was reviewed', async () => {
-  setup({input: {...context, total: 17, references: [], blocked_reason: 'reference_limit'}})
+it('keeps a large library selectable and blocks only an oversized generation selection', async () => {
+  const rows = Array.from({length: 17}, (_, i) => ({...references[0], id: `ref-${i}`, title: `참고 ${i}`}))
+  setup({input: {...context, total: 17, references: rows}})
   render(<ProjectGenerationPage projectId="p" navigate={vi.fn()} />)
-  expect(await screen.findByText(/일부만 자동 선택하지 않습니다/)).toBeInTheDocument()
+  expect(await screen.findByText(/한 번에 최대 16개/)).toBeInTheDocument()
+  expect(screen.getAllByRole('checkbox', {name: /참고 이미지 선택/})).toHaveLength(17)
+  await prepare()
   expect(screen.getByRole('button', {name: '프로젝트 시안 1장 만들기'})).toBeDisabled()
+  fireEvent.click(screen.getByRole('checkbox', {name: '참고 16 참고 이미지 선택'}))
+  expect(screen.getByRole('button', {name: '프로젝트 시안 1장 만들기'})).toBeEnabled()
+  expect(api).not.toHaveBeenCalledWith(expect.anything(), 'POST', expect.anything())
 })
 
 it('submits current requirements directly without a separate save', async () => {
@@ -189,4 +221,30 @@ it('shows saved guidance and blocks generation until changed-image regions are r
   expect(screen.getByText('영역 메모 1개')).toBeInTheDocument()
   expect(screen.getByRole('button', {name: '프로젝트 시안 1장 만들기'})).toBeDisabled()
   expect(api).not.toHaveBeenCalledWith('/projects/p/generations', 'POST', expect.anything())
+})
+
+it('submits physical output dimensions with the selected designer purpose', async () => {
+  setup()
+  render(<ProjectGenerationPage projectId="p" navigate={vi.fn()} />)
+  fireEvent.click(await screen.findByRole('combobox',{name:'사용 목적'}))
+  fireEvent.click(screen.getByRole('option',{name:'포스터'}))
+  fireEvent.change(screen.getByLabelText('가로'), {target:{value:'210'}})
+  fireEvent.change(screen.getByLabelText('세로'), {target:{value:'297'}})
+  await prepare()
+  fireEvent.click(screen.getByRole('button',{name:'프로젝트 시안 1장 만들기'}))
+  await waitFor(()=>expect(api).toHaveBeenCalledWith('/projects/p/generations','POST',expect.objectContaining({design_settings:{purpose:'poster',purpose_detail:'',width:210,height:297,unit:'mm',ppi:300}})))
+})
+
+it('restores the purpose, unit, physical dimensions and resolution for regeneration', async()=>{
+  setup()
+  const original=vi.mocked(api).getMockImplementation()!
+  vi.mocked(api).mockImplementation(async(path,method,body)=>path==='/generations/previous'
+    ? {id:'previous',scope:'project',project_id:'p',project_snapshot:{design_settings:{purpose:'packaging',purpose_detail:'',width:10,height:15,unit:'cm',ppi:150}}}
+    : original(path,method,body))
+  render(<ProjectGenerationPage projectId="p" fromJobId="previous" navigate={vi.fn()}/> )
+  await waitFor(()=>expect(screen.getByRole('combobox',{name:'사용 목적'})).toHaveTextContent('패키지·라벨'))
+  expect(screen.getByLabelText('크기 단위')).toHaveValue('cm')
+  expect(screen.getByLabelText('가로')).toHaveValue(10)
+  expect(screen.getByLabelText('세로')).toHaveValue(15)
+  expect(screen.getByLabelText('해상도 (ppi)')).toHaveValue(150)
 })

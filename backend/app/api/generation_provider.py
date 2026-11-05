@@ -1,9 +1,12 @@
 """Single-attempt image editing; original image exists only in request memory."""
+
 import base64
 import io
 import json
 import ssl
 import warnings
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 import certifi
 import httpx
@@ -13,27 +16,70 @@ from app.core.settings import get_settings
 
 MODEL = "gpt-image-2.5-flare-2026-09-08"
 MAX_IMAGE = 8 * 1024 * 1024
+MAX_RESULT = 64 * 1024 * 1024
+_generation_size = ContextVar("generation_size", default="1024x1024")
+
+
+@contextmanager
+def generation_size(size):
+    token = _generation_size.set(size)
+    try:
+        yield
+    finally:
+        _generation_size.reset(token)
 
 
 class ProviderFailure(Exception):
     def __init__(self, code: str, http_status=None, reason=None):
-        self.code = code if isinstance(code, str) and code in {
-            "INVALID_IMAGE", "INVALID_MASK", "INVALID_RESULT", "NOT_CONFIGURED",
-            "PROVIDER_REJECTED", "OUTCOME_UNKNOWN", "VERIFICATION_ALREADY_ATTEMPTED",
-        } else "OUTCOME_UNKNOWN"
-        self.http_status = (http_status
-                            if type(http_status) is int and 400 <= http_status <= 599 else None)
-        self.reason = reason if isinstance(reason, str) and reason in {
-            "authentication", "permission", "model_unavailable", "quota", "rate_limit",
-            "invalid_request", "safety", "upstream", "timeout", "connection", "rejected",
-        } else None
+        self.code = (
+            code
+            if isinstance(code, str)
+            and code
+            in {
+                "INVALID_IMAGE",
+                "INVALID_MASK",
+                "INVALID_RESULT",
+                "NOT_CONFIGURED",
+                "PROVIDER_REJECTED",
+                "OUTCOME_UNKNOWN",
+                "VERIFICATION_ALREADY_ATTEMPTED",
+            }
+            else "OUTCOME_UNKNOWN"
+        )
+        self.http_status = (
+            http_status if type(http_status) is int and 400 <= http_status <= 599 else None
+        )
+        self.reason = (
+            reason
+            if isinstance(reason, str)
+            and reason
+            in {
+                "authentication",
+                "permission",
+                "model_unavailable",
+                "quota",
+                "rate_limit",
+                "invalid_request",
+                "safety",
+                "upstream",
+                "timeout",
+                "connection",
+                "rejected",
+            }
+            else None
+        )
         super().__init__(self.code)
 
 
 def rejection(response):
     status = response.status_code
-    reason = {400: "invalid_request", 401: "authentication", 403: "permission",
-              404: "model_unavailable", 429: "rate_limit"}.get(status, "rejected")
+    reason = {
+        400: "invalid_request",
+        401: "authentication",
+        403: "permission",
+        404: "model_unavailable",
+        429: "rate_limit",
+    }.get(status, "rejected")
     # Parse only a bounded body and retain only explicitly recognized categories, never messages.
     body = bytearray()
     for chunk in response.iter_bytes(chunk_size=4096):
@@ -50,18 +96,24 @@ def rejection(response):
                 reason = "safety"
         except (ValueError, AttributeError, TypeError):
             pass
-    return ProviderFailure("OUTCOME_UNKNOWN" if status >= 500 else "PROVIDER_REJECTED",
-                           status, "upstream" if status >= 500 else reason)
+    return ProviderFailure(
+        "OUTCOME_UNKNOWN" if status >= 500 else "PROVIDER_REJECTED",
+        status,
+        "upstream" if status >= 500 else reason,
+    )
 
 
-def decode_image(value: str) -> bytes:
+def decode_image(value: str, *, max_bytes=MAX_IMAGE) -> bytes:
     try:
         header, encoded = value.split(",", 1)
-        if header not in {"data:image/png;base64", "data:image/jpeg;base64",
-                          "data:image/webp;base64"}:
+        if header not in {
+            "data:image/png;base64",
+            "data:image/jpeg;base64",
+            "data:image/webp;base64",
+        }:
             raise ValueError
         raw = base64.b64decode(encoded, validate=True)
-        if not raw or len(raw) > MAX_IMAGE:
+        if not raw or len(raw) > max_bytes:
             raise ValueError
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
@@ -72,13 +124,18 @@ def decode_image(value: str) -> bytes:
                     raise ValueError
                 image.verify()
         return raw
-    except (ValueError, OSError, UnidentifiedImageError,
-            Image.DecompressionBombError, Image.DecompressionBombWarning) as error:
+    except (
+        ValueError,
+        OSError,
+        UnidentifiedImageError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+    ) as error:
         raise ProviderFailure("INVALID_IMAGE") from error
 
 
 def marked_result(encoded: str) -> str:
-    raw = decode_image("data:image/png;base64," + encoded)
+    raw = decode_image("data:image/png;base64," + encoded, max_bytes=MAX_RESULT)
     with Image.open(io.BytesIO(raw)) as source:
         image = source.convert("RGB")
         draw = ImageDraw.Draw(image)
@@ -119,24 +176,32 @@ def edit_image(source: str, mask: str, prompt: str, safety_id: str) -> tuple[str
     return request_image(source, prompt, safety_id, mask=mask)
 
 
-def request_image(source: str | list[str], prompt: str, safety_id: str,
-                  mask=None) -> tuple[str, dict]:
+def request_image(
+    source: str | list[str], prompt: str, safety_id: str, mask=None
+) -> tuple[str, dict]:
     key = get_settings().openai_api_key
     if not key:
         raise ProviderFailure("NOT_CONFIGURED")
     context = ssl.create_default_context()
     context.load_verify_locations(certifi.where())
     images = source if isinstance(source, list) else [source]
-    payload = {"model": MODEL, "images": [{"image_url": image} for image in images],
-               "prompt": prompt,
-               "n": 1, "size": "1024x1024", "quality": "low",
-               "output_format": "png", "safety_identifier": safety_id}
+    payload = {
+        "model": MODEL,
+        "images": [{"image_url": image} for image in images],
+        "prompt": prompt,
+        "n": 1,
+        "size": _generation_size.get(),
+        "quality": "low",
+        "output_format": "png",
+        "safety_identifier": safety_id,
+    }
     if mask is not None:
         payload["mask"] = {"image_url": mask}
     try:
         with httpx.Client(verify=context, timeout=httpx.Timeout(120, connect=10)) as client:
             with client.stream(
-                "POST", "https://api.openai.com/v1/images/edits",
+                "POST",
+                "https://api.openai.com/v1/images/edits",
                 headers={"Authorization": "Bearer " + key.get_secret_value()},
                 json=payload,
             ) as response:
@@ -145,14 +210,16 @@ def request_image(source: str | list[str], prompt: str, safety_id: str,
                 body = bytearray()
                 for chunk in response.iter_bytes():
                     body.extend(chunk)
-                    if len(body) > 12 * 1024 * 1024:
+                    if len(body) > 48 * 1024 * 1024:
                         raise ProviderFailure("INVALID_RESULT")
                 data = json.loads(body)
                 return marked_result(data["data"][0]["b64_json"]), token_usage(data.get("usage"))
     except httpx.RequestError as error:
         # The provider may have charged: never retry an ambiguous request.
-        raise ProviderFailure("OUTCOME_UNKNOWN", reason=(
-            "timeout" if isinstance(error, httpx.TimeoutException) else "connection")) from None
+        raise ProviderFailure(
+            "OUTCOME_UNKNOWN",
+            reason=("timeout" if isinstance(error, httpx.TimeoutException) else "connection"),
+        ) from None
     except (KeyError, IndexError, ValueError, TypeError) as error:
         raise ProviderFailure("INVALID_RESULT") from error
 

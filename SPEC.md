@@ -1,5 +1,7 @@
 # 제품·기술 명세 (SPEC)
 
+> 2026-11-05 현재 계약: [현재 상태](./docs/current-status.md), [규격 설정](./docs/design-settings.md), [참고 요소](./docs/reference-guidance.md), [생성 안정성](./docs/generation-reliability.md)을 따른다. 과거 AI 탭·전체 입력·요구사항 저장 설명과 충돌하면 현재 계약을 우선한다. 선택한 1~16개로 생성하고 CTA에서 현재 요구사항을 반영한다. 영역 편집·재시작 자동 재개는 출시 제외다.
+
 ## 1. 문서 정보와 범위
 
 - 기준 문서: [기획.md](./기획.md), [PRD.md](./PRD.md)

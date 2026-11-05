@@ -4,9 +4,10 @@ import { RegionPrototype } from './RegionPrototype'
 import { GenerationMetrics } from './GenerationMetrics'
 import { GuidanceSummary } from './ReferenceGuidance'
 import type { DesignGuidance } from './lib/api'
+import type { DesignSpecification } from './lib/designSettings'
 
 interface Policy {enabled: boolean; remaining: number; daily_limit: number; model: string; reason?: string}
-interface Job {id: string; reference_id: string | null; project_id?: string | null; scope?: string; status: string; operation?: string; direction?: string; instruction: string; note_snapshot: string; result_image?: string | null; error_code?: string; provider_reason?: string | null; elapsed_ms?: number; usage?: {total_tokens?: number}; project_snapshot?: {type_id?: string; project_name: string; brief: string; references: {id: string; title: string; type_name: string; design_note: string; design_guidance?: DesignGuidance}[]}}
+interface Job {id: string; reference_id: string | null; project_id?: string | null; scope?: string; status: string; operation?: string; direction?: string; instruction: string; note_snapshot: string; result_image?: string | null; error_code?: string; provider_reason?: string | null; elapsed_ms?: number; usage?: {total_tokens?: number}; project_snapshot?: {design_settings?: DesignSpecification; type_id?: string; project_name: string; brief: string; references: {id: string; title: string; type_name: string; design_note: string; design_guidance?: DesignGuidance}[]}}
 const labels: Record<string, string> = {queued: '생성 대기 중', processing: 'AI 시안 생성 중…', succeeded: '생성 완료', failed: '생성 실패', unknown: '결과 확인 필요'}
 const diagnosticMessages: Record<string, string> = {
   authentication: '서버의 AI 인증 설정을 확인해야 합니다.',
@@ -39,17 +40,22 @@ export function GenerationPage({referenceId, jobId, fromJobId, navigate}: {refer
   const [rights, setRights] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [reload, setReload] = useState(0)
+  const [connection, setConnection] = useState('')
   const request = useRef(crypto.randomUUID())
   const [ambiguous, setAmbiguous] = useState(false)
   useEffect(() => {
     let active = true
     let timer: ReturnType<typeof setTimeout>
+    let failures = 0
     async function load() {
       try {
         if (jobId) {
           const value = await api<Job>(`/generations/${jobId}`)
           if (!active) return
           setJob(value)
+          failures = 0
+          setConnection('')
           if (['queued', 'processing'].includes(value.status)) timer = setTimeout(load, 2000)
         } else if (referenceId) {
           const [ref, config, history] = await Promise.all([
@@ -63,11 +69,20 @@ export function GenerationPage({referenceId, jobId, fromJobId, navigate}: {refer
           }
           if (active) {setReference(ref); setPolicy(config); setJobs(history.items)}
         }
-      } catch (reason) {if (active) setError(errorMessage(reason))}
+      } catch (reason) {
+        if (!active) return
+        if (jobId) {
+          const retryable = !(reason instanceof ApiError) || reason.status === 0 || reason.status >= 500 || reason.status === 429
+          failures += 1
+          const retry = retryable && failures <= 4
+          setConnection(retry ? '연결 복구 중입니다. 생성 요청을 다시 보내지 않고 상태만 확인합니다.' : '상태를 확인하지 못했습니다. 잠시 후 다시 확인해 주세요.')
+          if (retry) timer = setTimeout(load, Math.min(2000 * 2 ** (failures - 1), 16000))
+        } else setError(errorMessage(reason))
+      }
     }
     void load()
     return () => {active = false; clearTimeout(timer)}
-  }, [referenceId, jobId, fromJobId])
+  }, [referenceId, jobId, fromJobId, reload])
 
   function changed() {request.current = crypto.randomUUID(); setAmbiguous(false); setError('')}
   async function selectFile(file?: File) {
@@ -89,6 +104,7 @@ export function GenerationPage({referenceId, jobId, fromJobId, navigate}: {refer
     <div className="generation-page-heading"><h1>{jobId ? '생성 결과' : '레퍼런스에서 새로운 시안 만들기'}</h1><GenerationMetrics /></div>
     <p className="hint">{job?.scope === 'project' ? `선택한 레퍼런스 ${job.project_snapshot?.references.length ?? ''}개와 메모를 참고한 AI 탐색 시안입니다.` : jobId && job?.scope === 'reference' ? '과거 단일 레퍼런스의 AI 탐색 시안입니다.' : '전체 이미지와 디자인 메모를 참고한 탐색용 이미지입니다.'}</p>
     {error && <p className="error" role="alert">{error}</p>}
+    {connection && <div className="notice"><p role="status">{connection}</p><button type="button" className="secondary" onClick={() => setReload(value => value + 1)}>상태 다시 확인</button></div>}
     {jobId ? job && <article className="generation-result">
       <div className="section-heading"><h2 role="status">{labels[job.status] || job.status}</h2><span>AI 생성 이미지</span></div>
       {['queued', 'processing'].includes(job.status) && <p>이 화면을 나가도 작업은 계속됩니다. 잠시 후 생성 이력에서 다시 확인할 수 있습니다.</p>}
@@ -99,7 +115,7 @@ export function GenerationPage({referenceId, jobId, fromJobId, navigate}: {refer
       {job.result_image && job.reference_id && <RegionPrototype key={job.id} source={job.result_image} referenceId={job.reference_id} direction={job.direction || job.note_snapshot} navigate={navigate} />}
       </div><aside className="generation-output-sidebar" aria-label="시안 정보와 작업">
       {job.operation === 'edit' && <div className="generation-notes"><h3>영역 편집 · 유지할 디자인 방향</h3><p>{job.direction || '저장된 메모의 방향 유지'}</p></div>}
-      {job.project_snapshot && <div className="generation-result-summary"><strong>{job.project_snapshot.project_name}</strong><p className="generation-brief-excerpt" title={job.project_snapshot.brief}>{job.project_snapshot.brief}</p><span>참고 레퍼런스 {job.project_snapshot.references.length}개</span></div>}
+      {job.project_snapshot && <div className="generation-result-summary"><strong>{job.project_snapshot.project_name}</strong>{job.project_snapshot.design_settings && <p className="design-result-spec">{job.project_snapshot.design_settings.purpose_label}<br />{job.project_snapshot.design_settings.width} × {job.project_snapshot.design_settings.height} {job.project_snapshot.design_settings.unit} · {job.project_snapshot.design_settings.pixel_width} × {job.project_snapshot.design_settings.pixel_height}px{job.project_snapshot.design_settings.unit !== 'px' && ` · ${job.project_snapshot.design_settings.ppi}ppi`}</p>}<p className="generation-brief-excerpt" title={job.project_snapshot.brief}>{job.project_snapshot.brief}</p><span>참고 레퍼런스 {job.project_snapshot.references.length}개</span></div>}
       {(job.result_image || job.status === 'succeeded') && <div className="generation-primary-actions">{job.result_image && <a className="button" href={job.result_image} download={`ai-concept-${job.id}.png`}>AI 시안 다운로드</a>}
         {job.status === 'succeeded' && <button type="button" className="text-button" title="입력과 조건을 검토하는 화면으로 이동합니다" onClick={() => navigate(projectPath ? job.scope === 'project' ? `${projectPath}${projectPath.includes('?') ? '&' : '?'}from=${encodeURIComponent(job.id)}` : projectPath : `/references/${job.reference_id}/generate?from=${encodeURIComponent(job.id)}`)}>{job.scope === 'reference' && projectPath ? '프로젝트 전체 시안 만들기' : '다른 시안 만들기 →'}</button>}
       </div>}

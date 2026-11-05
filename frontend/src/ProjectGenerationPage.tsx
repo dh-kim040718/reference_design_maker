@@ -3,6 +3,8 @@ import { api, ApiError, errorMessage, type Reference, type DesignGuidance } from
 import { GuidanceSummary } from './ReferenceGuidance'
 import { GenerationMetrics } from './GenerationMetrics'
 import { ProjectHeader } from './ProjectHeader'
+import { DesignSettingsFields } from './DesignSettingsFields'
+import { defaultDesignSettings, designPreview, type DesignSettings } from './lib/designSettings'
 
 interface InputReference {
   id: string; title: string; source_url: string; design_note: string; type_name: string
@@ -14,6 +16,7 @@ interface Context {
   project_id: string; project_name: string; brief: string; references: InputReference[]
   total: number; context_digest: string; blocked_reason: string; max_references: number
   read_only: boolean; prompt_characters: number
+  prompt_base_characters?: number; prompt_reference_characters?: Record<string, number>
 }
 interface Policy {enabled: boolean; reason?: string; remaining: number; daily_limit: number}
 interface ImageIssue {message: string; retryable: boolean; stale?: boolean}
@@ -23,7 +26,7 @@ function imageIssue(reason: unknown): ImageIssue {
     ? '이미지 준비 중 앱 서버 오류가 발생했습니다. 이미지를 바꾸지 않고 다시 준비할 수 있습니다.' : errorMessage(reason),
     retryable, stale: reason instanceof ApiError && reason.code === 'PREVIEW_CHANGED'}
 }
-interface HistoryJob {id: string; scope: string; status: string; instruction: string; note_snapshot: string; project_id: string; project_snapshot?: {selected_reference_ids?: string[]}}
+interface HistoryJob {id: string; scope: string; status: string; instruction: string; note_snapshot: string; project_id: string; project_snapshot?: {selected_reference_ids?: string[]; design_settings?: DesignSettings}}
 const labels: Record<string, string> = {queued: '대기', processing: '생성 중', succeeded: '완료', failed: '실패', unknown: '결과 확인 필요'}
 const policyLabels: Record<string, string> = {budget_unconfigured: 'AI 예산 설정 대기', budget_exhausted: 'AI 예산 한도 도달', billing_reconciliation_required: '이전 사용 내역 확인 필요', budget_ledger_inconsistent: '예산 기록 확인 필요', key_missing: 'AI 연결 설정 대기', approval_required: '유료 API 사용 승인 대기'}
 const sourceBytes = (value: string) => {const encoded = value.split(',')[1] || ''; return encoded.length * 3 / 4 - (encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0)}
@@ -44,6 +47,7 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
   const contextPath = `/projects/${projectId}/generation-context${typeId ? `?type_id=${encodeURIComponent(typeId)}` : ''}`
   const [context, setContext] = useState<Context | null>(null)
   const [brief, setBrief] = useState('')
+  const [designSettings, setDesignSettings] = useState<DesignSettings>({...defaultDesignSettings})
   const [policy, setPolicy] = useState<Policy | null>(null)
   const [history, setHistory] = useState<HistoryJob[]>([])
   const [sources, setSources] = useState<Record<string, string>>({})
@@ -73,6 +77,10 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
           if (!active) return
           if (previous.scope !== 'project' || previous.project_id !== projectId) throw new Error('이 프로젝트의 시안만 재생성할 수 있습니다.')
           setInstruction(previous.instruction || '')
+          if (previous.project_snapshot?.design_settings) {
+            const saved = previous.project_snapshot.design_settings
+            setDesignSettings({purpose:saved.purpose,purpose_detail:saved.purpose_detail,width:saved.width,height:saved.height,unit:saved.unit,ppi:saved.ppi})
+          }
           const chosen = previous.project_snapshot?.selected_reference_ids
           if (chosen) setExcludedIds(input.references.filter(row => !chosen.includes(row.id)).map(row => row.id))
           setNotice('이전 추가 요청과 레퍼런스 선택을 가져왔습니다. 현재 입력을 확인해 새 시안을 만드세요. 이전 결과는 유지됩니다.')
@@ -82,7 +90,7 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
     void load()
     return () => {active = false}
   }, [projectId, fromJobId, contextPath])
-  const dirty = !!context && (brief !== context.brief || !!instruction || Object.keys(sources).length > 0 || excludedIds.length > 0)
+  const dirty = !!context && (brief !== context.brief || !!instruction || Object.keys(sources).length > 0 || excludedIds.length > 0 || JSON.stringify(designSettings)!==JSON.stringify(defaultDesignSettings))
   useEffect(() => {
     onDirtyChange?.(dirty)
     const warn = (event: BeforeUnloadEvent) => {if (dirty) {event.preventDefault(); event.returnValue = ''}}
@@ -93,10 +101,29 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
   const locked = busy || ambiguous || !!context?.read_only
   const selectedReferences = context?.references.filter(row => !excludedIds.includes(row.id)) || []
   const staleGuidance = selectedReferences.some(row => row.guidance_stale)
+  const invalidDesignSettings = !!designPreview(designSettings).error
   const totalBytes = selectedReferences.reduce((sum, row) => sum + sourceBytes(sources[row.id] || ''), 0)
   const tooLarge = totalBytes > 16 * 1024 * 1024
-  const promptTooLong = !!context && context.prompt_characters - context.brief.length + brief.length + instruction.length > 32000
+  const selectionTooLarge = selectedReferences.length > (context?.max_references || 16)
+  const promptCharacters = context?.prompt_reference_characters && context.prompt_base_characters !== undefined
+    ? context.prompt_base_characters + selectedReferences.reduce((sum, row) => sum + (context.prompt_reference_characters?.[row.id] || 0), 0) + Math.max(0, selectedReferences.length - 1) * 2
+    : context?.prompt_characters || 0
+  const promptTooLong = !!context && promptCharacters - context.brief.length + brief.length + instruction.length > 32000
   const activeJob = history.find(job => ['queued', 'processing'].includes(job.status))
+  const blockers = [
+    context?.read_only && {message:'보관된 프로젝트·분류에서는 생성할 수 없습니다.',target:''},
+    policy && !policy.enabled && {message:policy.reason === 'budget_exhausted' ? '앱의 예약 예산 한도에 도달했습니다. 실제 청구액 확인 후 서버 예산 설정을 조정해야 합니다.' : `${policyLabels[policy.reason || ''] || 'AI 사용 제한'} 상태입니다. 서버 설정을 확인해 주세요.`,target:''},
+    policy?.enabled && !policy.remaining && {message:'오늘의 생성 횟수를 모두 사용했습니다. 다음 UTC 날짜에 다시 시도해 주세요.',target:''},
+    !selectedReferences.length && {message:'참고할 레퍼런스를 한 개 이상 선택해 주세요.',target:'concept-references'},
+    selectionTooLarge && {message:`선택한 자료를 ${context?.max_references || 16}개 이하로 줄여 주세요.`,target:'concept-references'},
+    !brief.trim() && {message:'어떤 디자인을 만들지 요구사항을 입력해 주세요.',target:'concept-brief-input'},
+    invalidDesignSettings && {message:designPreview(designSettings).error,target:'concept-settings'},
+    staleGuidance && {message:'이미지가 변경된 참고 영역을 재확인해 주세요.',target:'concept-references'},
+    tooLarge && {message:'선택한 이미지 합계를 16MB 이하로 줄여 주세요.',target:'concept-references'},
+    (promptTooLong || context?.blocked_reason === 'prompt_limit') && {message:'요구사항·메모·추가 요청의 길이를 줄여 주세요.',target:'concept-brief-input'},
+    context?.blocked_reason && !['no_references','prompt_limit'].includes(context.blocked_reason) && {message:'프로젝트 입력을 새로고침해 제한 사항을 확인해 주세요.',target:'concept-references'},
+    !rights && {message:'선택한 이미지의 AI 사용 권한을 확인해 주세요.',target:'concept-rights'},
+  ].filter((item): item is {message:string;target:string} => !!item)
   async function readSource(row: InputReference) {
     if (row.preview_url?.startsWith('data:image/')) return row.preview_url
     return (await api<{image: string}>(`/references/${row.id}/generation-source${row.preview_version ? `?version=${encodeURIComponent(row.preview_version)}` : ''}`)).image
@@ -126,11 +153,12 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     {context.read_only && <p className="notice">보관된 프로젝트입니다. 입력과 이력은 확인할 수 있으며 새 시안은 만들 수 없습니다.</p>}
-    <section className="concept-brief"><h2>2. 프로젝트 요구사항</h2>
-      <label>어떤 디자인을 만들까요?<textarea rows={3} maxLength={5000} value={brief} disabled={locked} onChange={event => {changed(); setBrief(event.target.value)}} placeholder="만들 화면, 핵심 기능, 원하는 분위기를 적어 주세요." /></label>
+    <section className="concept-brief" id="concept-settings"><h2>2. 시안 설정</h2>
+      <DesignSettingsFields value={designSettings} disabled={locked} onChange={value=>{changed();setDesignSettings(value)}}/>
+      <label>어떤 디자인을 만들까요?<textarea id="concept-brief-input" rows={3} maxLength={5000} value={brief} disabled={locked} onChange={event => {changed(); setBrief(event.target.value)}} placeholder="만들 화면, 핵심 기능, 원하는 분위기를 적어 주세요." /></label>
       <p className="hint">우선순위: 추가 요청 → 프로젝트 요구사항 → 메모</p>
     </section>
-    <section className="concept-inputs"><div className="section-heading"><h2>1. {context.type_name ? `${context.type_name} 분류 레퍼런스` : '검토할 전체 레퍼런스'} · {context.total}개</h2>
+    <section className="concept-inputs" id="concept-references"><div className="section-heading"><h2>1. {context.type_name ? `${context.type_name} 분류 레퍼런스` : '검토할 전체 레퍼런스'} · {context.total}개</h2>
       <button className="secondary" disabled={busy || ambiguous} onClick={async () => {
         setBusy(true)
         try {
@@ -148,7 +176,7 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
         <button type="button" className="text-button" disabled={locked || !selectedReferences.length} onClick={() => {changed(); setExcludedIds(context.references.map(row => row.id))}}>전체 해제</button>
         <span role="status" aria-live="polite">{selectedReferences.length} / {context.total}개 선택</span>
       </div>
-      {context.blocked_reason === 'reference_limit' && <p className="notice">레퍼런스 {context.total}개 전체를 현재 한 번에 검토할 수 없습니다(최대 {context.max_references}개). 일부만 자동 선택하지 않습니다. 프로젝트 범위를 정리한 뒤 다시 확인해 주세요.</p>}
+      {selectionTooLarge && <p className="notice" role="status">한 번에 최대 {context.max_references}개로 생성할 수 있습니다. 전체 해제 후 필요한 자료를 선택하거나 체크를 줄여 주세요.</p>}
       {context.blocked_reason === 'no_references' && <p className="notice">프로젝트에 레퍼런스를 먼저 추가해 주세요.</p>}
       <div className="concept-reference-grid">{context.references.map((row, index) => <article className={`concept-reference ${excludedIds.includes(row.id) ? 'is-excluded' : 'is-selected'}`} key={row.id}>
         <label className="concept-card-select"><input type="checkbox" aria-label={`${row.title} 참고 이미지 선택`} checked={!excludedIds.includes(row.id)} disabled={locked} onChange={event => {changed(); setExcludedIds(previous => event.target.checked ? previous.filter(id => id !== row.id) : [...previous, row.id])}} /><span className="sr-only">참고 이미지 선택</span></label>
@@ -171,7 +199,7 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
     </section>
     <form className="concept-submit" onSubmit={async event => {
       event.preventDefault()
-      if (staleGuidance || busy || activeJob || !policy.enabled || !selectedReferences.length || tooLarge || promptTooLong || !rights || !brief.trim() || context.blocked_reason || context.read_only) return
+      if (busy || activeJob || blockers.length) return
       setBusy(true); setError('')
       let submitted = false
       try {
@@ -196,7 +224,7 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
           ...(typeId ? {type_id: typeId} : {}),
           brief,
           selected_reference_ids: selectedReferences.map(row => row.id),
-          sources: selectedReferences.map(row => ({reference_id: row.id, image: prepared[row.id]})), instruction, rights_confirmed: rights,
+          sources: selectedReferences.map(row => ({reference_id: row.id, image: prepared[row.id]})), instruction, rights_confirmed: rights, design_settings: designSettings,
         })
         onDirtyChange?.(false); navigate(`/generations/${job.id}`)
       } catch (reason) {
@@ -208,15 +236,9 @@ export function ProjectGenerationPage({projectId, fromJobId, typeId, navigate, o
       <div className="generation-policy"><strong>{policy.enabled ? `오늘 남은 생성 ${policy.remaining} / ${policy.daily_limit}회` : policyLabels[policy.reason || ''] || '유료 API 사용 승인 대기'}</strong>
         <p>선택한 레퍼런스 {selectedReferences.length}개 · 이미지와 메모 자동 반영</p>
         <p className="hint">이미지 수에 따라 비용이 달라집니다. 실제 청구액은 제공자 사용 내역에서 확인하세요.</p></div>
-      {(context.blocked_reason === 'prompt_limit' || promptTooLong) && <p className="notice">전체 요구사항·메모·추가 요청의 길이가 입력 한도를 초과했습니다. 일부 메모를 조용히 생략하지 않습니다.</p>}
-      {tooLarge && <p className="notice">전체 이미지 합계가 16MB를 초과했습니다. 더 작은 이미지를 선택해 주세요.</p>}
-      {!selectedReferences.length && <p className="hint" role="status">참고할 레퍼런스를 한 개 이상 선택해 주세요.</p>}
-      {staleGuidance && <p className="error" role="status">선택한 이미지의 참고 영역을 재확인한 뒤 프로젝트 입력을 새로고침해 주세요.</p>}
-      <label className="rights-check"><input type="checkbox" checked={rights} disabled={locked} onChange={event => setRights(event.target.checked)} /><span>프로젝트의 모든 입력 이미지를 AI 생성에 사용할 권한을 확인했습니다.</span></label>
-      {!policy.enabled && <p className="hint" role="status">{policy.reason === 'budget_exhausted'
-        ? '앱의 API 예산 제한으로 생성이 잠겨 있습니다. 체크 여부와 관계없이 새 요청을 보낼 수 없습니다. 실제 청구액과 앱의 예약 예산은 다를 수 있으며, 사용 내역 확인 후 서버 예산 설정을 조정해야 합니다.'
-        : `${policyLabels[policy.reason || ''] || 'AI 사용 제한'} 상태여서 생성할 수 없습니다. 서버의 AI 사용 설정을 확인해 주세요.`}</p>}
-      {activeJob ? <button type="button" onClick={() => navigate(`/generations/${activeJob.id}`)}>진행 중인 요청 확인</button> : <button disabled={staleGuidance || busy || !selectedReferences.length || !policy.enabled || !policy.remaining || tooLarge || promptTooLong || !rights || !brief.trim() ||  !!context.blocked_reason || context.read_only}>{busy ? (preparing ? '이미지 준비 중…' : '요청 중…') : ambiguous ? '같은 프로젝트 요청 상태 확인' : context.type_name ? '이 분류 시안 1장 만들기' : '프로젝트 시안 1장 만들기'}</button>}
+      <label className="rights-check"><input id="concept-rights" type="checkbox" checked={rights} disabled={locked} onChange={event => setRights(event.target.checked)} /><span>프로젝트의 모든 입력 이미지를 AI 생성에 사용할 권한을 확인했습니다.</span></label>
+      {!busy && !activeJob && blockers.length > 0 && <div id="concept-blockers" className="concept-blockers" role="status" aria-live="polite"><strong>생성 전 확인</strong><ul>{blockers.map(item=><li key={item.message}>{item.target ? <a href={'#'+item.target}>{item.message}</a> : item.message}</li>)}</ul></div>}
+      {activeJob ? <button type="button" onClick={() => navigate(`/generations/${activeJob.id}`)}>진행 중인 요청 확인</button> : <button aria-describedby={blockers.length ? 'concept-blockers' : undefined} disabled={busy || blockers.length > 0}>{busy ? (preparing ? '이미지 준비 중…' : '요청 중…') : ambiguous ? '같은 프로젝트 요청 상태 확인' : context.type_name ? '이 분류 시안 1장 만들기' : '프로젝트 시안 1장 만들기'}</button>}
     </form>
     <details id="history" open={window.location.hash === '#history' || undefined} className="generation-history"><summary>프로젝트 시안 이력 · {history.length}개</summary><p className="hint">최근 100개 · 과거 단일 참고 시안은 프로젝트 종합 결과와 구분합니다.</p>
       {!history.length && <p className="hint">아직 생성한 프로젝트 시안이 없습니다.</p>}

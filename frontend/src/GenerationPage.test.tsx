@@ -1,11 +1,55 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { GenerationPage } from './GenerationPage'
 import { api, ApiError } from './lib/api'
 
 vi.mock('./lib/api', async original => ({...await original<typeof import('./lib/api')>(), api: vi.fn()}))
-afterEach(() => {cleanup(); vi.resetAllMocks()})
+afterEach(() => {cleanup(); vi.useRealTimers(); vi.resetAllMocks()})
 const source = 'data:image/png;base64,dGVzdA=='
+it('recovers status polling after a temporary GET failure without posting another generation', async () => {
+  vi.useFakeTimers()
+  vi.mocked(api).mockResolvedValueOnce({id:'job', status:'processing'})
+    .mockRejectedValueOnce(new ApiError(0, 'offline'))
+    .mockResolvedValueOnce({id:'job', status:'succeeded', result_image:source})
+  render(<GenerationPage jobId="job" navigate={vi.fn()}/> )
+  await act(async () => {})
+  await act(async () => {await vi.advanceTimersByTimeAsync(2000)})
+  expect(screen.getByText(/연결 복구 중입니다/)).toBeInTheDocument()
+  await act(async () => {await vi.advanceTimersByTimeAsync(2000)})
+  expect(screen.getByRole('img', {name:'AI가 생성한 탐색 시안'})).toBeInTheDocument()
+  expect(screen.queryByText(/연결 복구 중입니다/)).not.toBeInTheDocument()
+  await act(async () => {await vi.advanceTimersByTimeAsync(60000)})
+  expect(api).toHaveBeenCalledTimes(3)
+  expect(vi.mocked(api).mock.calls.every(([path,method])=>path==='/generations/job'&&!method)).toBe(true)
+})
+
+it('stops automatic retries on authorization failure and allows manual status recovery', async () => {
+  vi.useFakeTimers()
+  vi.mocked(api).mockRejectedValueOnce(new ApiError(403, 'denied'))
+    .mockResolvedValueOnce({id:'job', status:'succeeded', result_image:source})
+  render(<GenerationPage jobId="job" navigate={vi.fn()}/> )
+  await act(async () => {})
+  await act(async () => {await vi.advanceTimersByTimeAsync(60000)})
+  expect(api).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole('button',{name:'상태 다시 확인'}))
+  await act(async () => {})
+  expect(screen.getByRole('img',{name:'AI가 생성한 탐색 시안'})).toBeInTheDocument()
+  expect(api).toHaveBeenCalledTimes(2)
+})
+it('bounds connection retries and cancels pending polling when leaving the page', async () => {
+  vi.useFakeTimers()
+  vi.mocked(api).mockRejectedValue(new ApiError(503, 'unavailable'))
+  const view = render(<GenerationPage jobId="job" navigate={vi.fn()}/> )
+  await act(async () => {})
+  await act(async () => {await vi.advanceTimersByTimeAsync(120000)})
+  expect(api).toHaveBeenCalledTimes(5)
+  expect(screen.getByText(/상태를 확인하지 못했습니다/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'상태 다시 확인'}))
+  await act(async () => {})
+  view.unmount()
+  await act(async () => {await vi.advanceTimersByTimeAsync(120000)})
+  expect(api).toHaveBeenCalledTimes(6)
+})
 function setup(enabled: boolean) {
   vi.mocked(api).mockImplementation(async path => {
     if (path === '/references/ref') return {id: 'ref', title: 'Dashboard', design_note: null, preview_url: source}

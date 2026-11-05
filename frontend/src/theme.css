@@ -27,7 +27,40 @@ h1,h2,h3 {color:var(--color-text);letter-spacing:-.035em}
 .project-library-header .project-history-link {margin-left:auto;font-size:12px;color:var(--color-muted);text-decoration:none;white-space:nowrap}
 .project-library-header .project-history-link+.project-add {margin-left:0;background:var(--color-hover);color:var(--color-text)}
 .generation-history:target {scroll-margin-top:20px}
+.concept-blockers {font-size:12px;line-height:1.5;color:var(--color-muted)}
+.concept-blockers strong {font-size:12px;color:var(--color-text)}
+.concept-blockers ul {margin:4px 0 0;padding-left:18px}
+.concept-blockers li+li {margin-top:4px}
+.concept-blockers a {color:inherit;text-decoration:underline;text-underline-offset:3px}
+#concept-references,#concept-settings,#concept-brief-input,#concept-rights {scroll-margin-top:20px}
 .reference-guidance {padding:14px 0 8px;border-top:1px solid var(--color-border)}
+.design-settings-fields {display:flex;flex-direction:column;gap:8px;margin-bottom:10px!important;padding-bottom:10px!important;border-bottom:1px solid var(--color-border)!important;min-width:0}
+.design-settings-fields label {margin:0;font-size:12px}
+.design-purpose-picker {position:relative;min-width:0}
+.design-purpose-label {display:block;font-size:12px;font-weight:600;margin-bottom:5px}
+.design-settings-fields .design-purpose-trigger {display:flex;align-items:center;gap:7px;min-height:36px;width:100%;padding:7px 9px;background:white;color:var(--color-text);border:1px solid var(--color-border-strong);border-radius:5px;font-size:12px;font-weight:400;text-align:left}
+.design-purpose-trigger>span:first-child {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.design-purpose-trigger .design-purpose-current-size {margin-left:auto;color:var(--color-muted);font-size:10px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.design-purpose-popover {position:absolute;z-index:30;top:calc(100% + 5px);right:0;width:max(100%,380px);max-width:calc(100vw - 48px);background:white;border:1px solid var(--color-border);border-radius:8px;box-shadow:0 8px 30px rgb(0 0 0 / 12%);overflow:hidden}
+.design-purpose-list {max-height:min(260px,45vh);overflow-y:auto;overscroll-behavior:contain;padding:4px}
+.design-purpose-group-label {padding:8px 8px 4px;font-size:10px;font-weight:600;color:var(--color-muted)}
+.design-settings-fields button.design-purpose-option {display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;min-height:32px;padding:7px 8px;border:0;border-radius:4px;background:white;color:var(--color-text);font-size:12px;font-weight:400;text-align:left}
+.design-settings-fields button.design-purpose-option.is-active {background:var(--color-subtle)}
+.design-settings-fields button.design-purpose-option[aria-selected=true] {background:var(--color-hover);font-weight:600}
+.design-purpose-option>span:last-child {color:var(--color-muted);font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.design-purpose-popover .design-purpose-help {margin:0!important;padding:8px 12px;border-top:1px solid var(--color-border);font-size:10px!important;color:var(--color-muted)}
+.design-settings-fields input,.design-settings-fields select {margin-top:5px;min-height:34px;padding:7px 9px;font-size:12px;border-radius:5px}
+.design-dimensions {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 64px;gap:8px}
+.design-dimensions input,.design-dimensions select {width:100%;min-width:0}
+.design-dimensions label {min-width:0;white-space:nowrap}
+.design-settings-fields .design-ppi {display:grid;grid-template-columns:1fr 80px;gap:8px;align-items:center}
+.design-ppi input {margin:0}
+.design-output-preview {display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 8px;padding:0;font-size:11px;color:var(--color-muted)}
+.design-output-preview strong {font-size:11px;font-weight:500}
+.design-output-preview details {margin:0}
+.design-output-preview summary {cursor:pointer;color:var(--color-muted)}
+.design-output-preview p {font-size:11px!important;line-height:1.6;margin:6px 0 0!important}
+.generation-output-sidebar .design-result-spec {font-size:12px;line-height:1.7;color:var(--color-muted);margin:8px 0}
 .inspector .inspector-summary {grid-template-columns:minmax(150px,.85fr) minmax(0,1.15fr);gap:20px;align-items:start}
 .inspector .inspector-image {height:190px;border-radius:6px;margin:0}
 .inspector .inspector-info {display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-width:0;padding:2px 0}
